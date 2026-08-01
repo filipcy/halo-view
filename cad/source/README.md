@@ -9,10 +9,12 @@ The generator creates named user parameters and separate components so prototype
 The model is intentionally limited to:
 
 - `TabletEnvelope`, a non-manufacturing reference body;
-- `Faceplate`, the visible front frame; and
+- `Faceplate`, the visible front lip plus rear perimeter skirt; and
 - `DockBody`, the preliminary wall-side shell.
 
 `WallInterface` and `Assembly` are named component placeholders. USB routing, the top latch, side guides, lower shelf, 3M Dual Lock fields, and final fillets/chamfers are explicitly deferred.
+
+The Faceplate component intentionally contains separate front-lip and rear-skirt solids. The lip preserves the 0.8 mm screen recess in front of the tablet display plane, while the skirt provides the remaining prototype structural depth only outside the tablet envelope.
 
 ## Output
 
