@@ -12,8 +12,6 @@ import traceback
 
 APP = adsk.core.Application.get()
 UI = APP.userInterface if APP else None
-MM_TO_CM = 0.1
-
 PARAMETERS = (
     # Captured device envelope.
     ('device_width', '125 mm', 'Device', 'Bare tablet width; validate by caliper'),
@@ -28,7 +26,7 @@ PARAMETERS = (
     ('pocket_clearance_y', '0.3 mm', 'Fit', 'Clearance per tablet end'),
     ('pocket_clearance_z', '0.3 mm', 'Fit', 'Clearance behind tablet'),
     # Open engineering parameters selected for the Iteration 1 model.
-    ('front_thickness', '2.0 mm', 'Faceplate', 'Prototype Faceplate structural thickness'),
+    ('front_thickness', '2.4 mm', 'Faceplate', 'Prototype Faceplate structural thickness'),
     ('wall_shadow_gap', '1.5 mm', 'Dock', 'Gap between tile and DockBody'),
     ('total_projection_target', '18 mm', 'Dock', 'Packaging target from tile to front face'),
     ('dock_back_thickness', '3 mm', 'Dock', 'Prototype rear wall thickness'),
@@ -39,7 +37,7 @@ PARAMETERS = (
     ('dual_lock_pad_width', '25 mm', 'Reserved', 'Placeholder; field geometry not released'),
     ('dual_lock_pad_height', '50 mm', 'Reserved', 'Placeholder; field geometry not released'),
     ('dual_lock_pad_edge_offset', '12 mm', 'Reserved', 'Placeholder; position not released'),
-    ('usb_port_datum_x', '59 mm', 'Reserved', 'Captured left-edge datum; requires confirmation'),
+    ('usb_port_datum_x', '59 mm', 'Reserved', 'Confirmed horizontal datum from the left device edge'),
     ('usb_port_datum_y', '1 mm', 'Reserved', 'Approximate lower-edge offset; requires confirmation'),
     ('usb_opening_width', '8 mm', 'Reserved', 'Approximate port opening width'),
     ('usb_opening_height', '2 mm', 'Reserved', 'Approximate port opening height'),
@@ -81,36 +79,114 @@ def _mm(design, name):
     return _parameter(design, name).value
 
 
-def _new_component(root, name, z_offset=0):
-    transform = adsk.core.Matrix3D.create()
-    transform.translation = adsk.core.Vector3D.create(0, 0, z_offset)
-    occurrence = root.occurrences.addNewComponent(transform)
+def _new_component(root, name):
+    occurrence = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
     occurrence.component.name = name
     return occurrence.component
 
 
-def _rounded_rectangle(sketch, width, height, radius):
-    """Draw a centred rounded rectangle and return its sketch profile."""
+def _set_dimension_expression(dimension, expression):
+    dimension.parameter.expression = expression
+
+
+def _rounded_rectangle(
+    sketch,
+    width,
+    height,
+    radius,
+    width_expression,
+    height_expression,
+    radius_expression,
+):
+    """Draw a rounded rectangle dimensioned from Fusion user parameters."""
     lines = sketch.sketchCurves.sketchLines
     arcs = sketch.sketchCurves.sketchArcs
     half_w, half_h = width / 2, height / 2
     r = min(radius, half_w, half_h)
-    lines.addByTwoPoints(adsk.core.Point3D.create(-half_w + r, half_h, 0), adsk.core.Point3D.create(half_w - r, half_h, 0))
-    lines.addByTwoPoints(adsk.core.Point3D.create(half_w, half_h - r, 0), adsk.core.Point3D.create(half_w, -half_h + r, 0))
-    lines.addByTwoPoints(adsk.core.Point3D.create(half_w - r, -half_h, 0), adsk.core.Point3D.create(-half_w + r, -half_h, 0))
-    lines.addByTwoPoints(adsk.core.Point3D.create(-half_w, -half_h + r, 0), adsk.core.Point3D.create(-half_w, half_h - r, 0))
-    arcs.addByCenterStartSweep(adsk.core.Point3D.create(half_w - r, half_h - r, 0), adsk.core.Point3D.create(half_w - r, half_h, 0), -3.141592653589793 / 2)
-    arcs.addByCenterStartSweep(adsk.core.Point3D.create(half_w - r, -half_h + r, 0), adsk.core.Point3D.create(half_w, -half_h + r, 0), -3.141592653589793 / 2)
-    arcs.addByCenterStartSweep(adsk.core.Point3D.create(-half_w + r, -half_h + r, 0), adsk.core.Point3D.create(-half_w + r, -half_h, 0), -3.141592653589793 / 2)
-    arcs.addByCenterStartSweep(adsk.core.Point3D.create(-half_w + r, half_h - r, 0), adsk.core.Point3D.create(-half_w, half_h - r, 0), -3.141592653589793 / 2)
+    line_entities = (
+        lines.addByTwoPoints(adsk.core.Point3D.create(-half_w + r, half_h, 0), adsk.core.Point3D.create(half_w - r, half_h, 0)),
+        lines.addByTwoPoints(adsk.core.Point3D.create(half_w, half_h - r, 0), adsk.core.Point3D.create(half_w, -half_h + r, 0)),
+        lines.addByTwoPoints(adsk.core.Point3D.create(half_w - r, -half_h, 0), adsk.core.Point3D.create(-half_w + r, -half_h, 0)),
+        lines.addByTwoPoints(adsk.core.Point3D.create(-half_w, -half_h + r, 0), adsk.core.Point3D.create(-half_w, half_h - r, 0)),
+    )
+    arc_entities = (
+        arcs.addByCenterStartSweep(adsk.core.Point3D.create(half_w - r, half_h - r, 0), adsk.core.Point3D.create(half_w - r, half_h, 0), -3.141592653589793 / 2),
+        arcs.addByCenterStartSweep(adsk.core.Point3D.create(half_w - r, -half_h + r, 0), adsk.core.Point3D.create(half_w, -half_h + r, 0), -3.141592653589793 / 2),
+        arcs.addByCenterStartSweep(adsk.core.Point3D.create(-half_w + r, -half_h + r, 0), adsk.core.Point3D.create(-half_w + r, -half_h, 0), -3.141592653589793 / 2),
+        arcs.addByCenterStartSweep(adsk.core.Point3D.create(-half_w + r, half_h - r, 0), adsk.core.Point3D.create(-half_w, half_h - r, 0), -3.141592653589793 / 2),
+    )
+
+    dimensions = sketch.sketchDimensions
+    horizontal = adsk.fusion.DimensionOrientations.HorizontalDimensionOrientation
+    vertical = adsk.fusion.DimensionOrientations.VerticalDimensionOrientation
+    for index in (0, 2):
+        line = line_entities[index]
+        dimension = dimensions.addDistanceDimension(
+            line.startSketchPoint,
+            line.endSketchPoint,
+            horizontal,
+            adsk.core.Point3D.create(0, line.startSketchPoint.geometry.y, 0),
+        )
+        _set_dimension_expression(dimension, f'{width_expression} - 2 * ({radius_expression})')
+    for index in (1, 3):
+        line = line_entities[index]
+        dimension = dimensions.addDistanceDimension(
+            line.startSketchPoint,
+            line.endSketchPoint,
+            vertical,
+            adsk.core.Point3D.create(line.startSketchPoint.geometry.x, 0, 0),
+        )
+        _set_dimension_expression(dimension, f'{height_expression} - 2 * ({radius_expression})')
+    for arc in arc_entities:
+        center = arc.centerSketchPoint.geometry
+        dimension = dimensions.addRadialDimension(
+            arc, adsk.core.Point3D.create(center.x + (1.5 * r), center.y, 0)
+        )
+        _set_dimension_expression(dimension, radius_expression)
+
+    # Anchor the upper-right corner centre to the sketch origin. Together with
+    # the inferred coincidence/tangency constraints, this keeps both nested
+    # rounded rectangles concentric when their user parameters change.
+    corner_center = arc_entities[0].centerSketchPoint
+    x_dimension = dimensions.addDistanceDimension(
+        sketch.originPoint,
+        corner_center,
+        horizontal,
+        adsk.core.Point3D.create(half_w / 2, 0, 0),
+    )
+    _set_dimension_expression(
+        x_dimension, f'({width_expression}) / 2 - ({radius_expression})'
+    )
+    y_dimension = dimensions.addDistanceDimension(
+        sketch.originPoint,
+        corner_center,
+        vertical,
+        adsk.core.Point3D.create(0, half_h / 2, 0),
+    )
+    _set_dimension_expression(
+        y_dimension, f'({height_expression}) / 2 - ({radius_expression})'
+    )
     return sketch.profiles.item(0)
 
 
-def _extrude(component, profile, distance, operation=adsk.fusion.FeatureOperations.NewBodyFeatureOperation):
+def _extrude(component, profile, distance_expression, operation=adsk.fusion.FeatureOperations.NewBodyFeatureOperation):
     extrudes = component.features.extrudeFeatures
     feature_input = extrudes.createInput(profile, operation)
-    feature_input.setDistanceExtent(False, adsk.core.ValueInput.createByReal(distance))
+    feature_input.setDistanceExtent(
+        False, adsk.core.ValueInput.createByString(distance_expression)
+    )
     return extrudes.add(feature_input)
+
+
+def _offset_plane(component, expression, name):
+    plane_input = component.constructionPlanes.createInput()
+    plane_input.setByOffset(
+        component.xYConstructionPlane,
+        adsk.core.ValueInput.createByString(expression),
+    )
+    plane = component.constructionPlanes.add(plane_input)
+    plane.name = name
+    return plane
 
 
 def _build_tablet_envelope(design, root):
@@ -122,8 +198,11 @@ def _build_tablet_envelope(design, root):
         _mm(design, 'device_width'),
         _mm(design, 'device_height'),
         _mm(design, 'device_corner_radius'),
+        'device_width',
+        'device_height',
+        'device_corner_radius',
     )
-    body = _extrude(component, profile, _mm(design, 'device_thickness')).bodies.item(0)
+    body = _extrude(component, profile, 'device_thickness').bodies.item(0)
     body.name = 'SM-X130 reference envelope - not for manufacture'
     return component
 
@@ -137,11 +216,15 @@ def _ring_profile(sketch):
 
 
 def _build_faceplate(design, root):
-    # The local component origin is the rear of the Faceplate. Its placement makes
-    # the tablet-to-front-plane distance equal pocket Z plus front thickness.
-    z_offset = _mm(design, 'device_thickness') + _mm(design, 'pocket_clearance_z')
-    component = _new_component(root, 'Faceplate', z_offset)
-    sketch = component.sketches.add(component.xYConstructionPlane)
+    # The rear plane is derived so the extruded front is exactly screen_recess
+    # ahead of the tablet display plane at device_thickness.
+    component = _new_component(root, 'Faceplate')
+    rear_plane = _offset_plane(
+        component,
+        'device_thickness + screen_recess - front_thickness',
+        'Faceplate rear plane (parameter driven)',
+    )
+    sketch = component.sketches.add(rear_plane)
     sketch.name = 'Faceplate outer edge and display opening'
 
     device_width = _mm(design, 'device_width')
@@ -155,14 +238,20 @@ def _build_faceplate(design, root):
         device_width + (2 * bezel),
         device_height + (2 * bezel),
         device_radius + bezel,
+        'device_width + 2 * bezel_width',
+        'device_height + 2 * bezel_width',
+        'device_corner_radius + bezel_width',
     )
     _rounded_rectangle(
         sketch,
         device_width - (2 * lip),
         device_height - (2 * lip),
         max(device_radius - lip, 0),
+        'device_width - 2 * inner_lip_overlap',
+        'device_height - 2 * inner_lip_overlap',
+        'device_corner_radius - inner_lip_overlap',
     )
-    feature = _extrude(component, _ring_profile(sketch), _mm(design, 'front_thickness'))
+    feature = _extrude(component, _ring_profile(sketch), 'front_thickness')
     feature.name = 'Visible bezel and screen lip'
     body = feature.bodies.item(0)
     body.name = 'HALO Faceplate Rev A'
@@ -172,8 +261,7 @@ def _build_faceplate(design, root):
 def _build_dock_body(design, root):
     # Iteration 1 is deliberately a planar backing body only. Tablet guides,
     # shelf, latch, cable chamber, mounting fields, and edge finishing follow.
-    back = _mm(design, 'dock_back_thickness')
-    component = _new_component(root, 'DockBody', -back)
+    component = _new_component(root, 'DockBody')
     sketch = component.sketches.add(component.xYConstructionPlane)
     sketch.name = 'Preliminary DockBody backing outline'
     clearance_x = _mm(design, 'pocket_clearance_x')
@@ -184,8 +272,11 @@ def _build_dock_body(design, root):
         _mm(design, 'device_width') + (2 * clearance_x) + (2 * wall),
         _mm(design, 'device_height') + (2 * clearance_y) + (2 * wall),
         _mm(design, 'device_corner_radius') + clearance_x + wall,
+        'device_width + 2 * pocket_clearance_x + 2 * dock_side_wall',
+        'device_height + 2 * pocket_clearance_y + 2 * dock_side_wall',
+        'device_corner_radius + pocket_clearance_x + dock_side_wall',
     )
-    feature = _extrude(component, profile, back)
+    feature = _extrude(component, profile, '-dock_back_thickness')
     feature.name = 'Iteration 1 planar backing'
     feature.bodies.item(0).name = 'HALO DockBody Rev A - preliminary'
     return component

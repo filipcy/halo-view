@@ -15,12 +15,12 @@ Only the first three contain geometry. `WallInterface` and `Assembly` are explic
 | Component | Iteration 1 content | Manufacturing status |
 |---|---|---|
 | TabletEnvelope | 125 × 211 × 8 mm rounded reference envelope, nominal 18 mm corners | Reference only; measurements require validation |
-| Faceplate | Rounded frame with 6 mm external bezel, 0.5 mm screen lip and 2 mm prototype structural thickness | Visual/fit review only |
+| Faceplate | Rounded frame with 6 mm external bezel, 0.5 mm screen lip and 2.4 mm prototype structural thickness | Visual/fit review only |
 | DockBody | 3 mm planar rounded backing sized from the cleared tablet envelope and 3 mm perimeter allowance | Packaging review only |
 | WallInterface | Empty named placeholder | Deferred |
 | Assembly | Empty named placeholder | Deferred |
 
-The Faceplate is placed 0.3 mm ahead of the nominal tablet thickness. Its front structural thickness remains an editable prototype assumption. The DockBody is placed immediately behind the tablet datum. The accepted 1.5 mm wall shadow gap and approximately 18 mm projection remain exposed parameters; the wall interface required to realize them is not modeled in this iteration.
+The tablet display plane is at the front of the nominal 8 mm tablet envelope. The Faceplate rear plane is derived as `device_thickness + screen_recess - front_thickness` (6.4 mm with the current values), and its 2.4 mm extrusion places the Faceplate front plane exactly 0.8 mm ahead of the display plane at 8.8 mm. The DockBody extrudes 3 mm rearward from the tablet rear datum. The accepted 1.5 mm wall shadow gap and approximately 18 mm projection remain exposed parameters; the wall interface required to realize them is not modeled in this iteration.
 
 ## Scope exclusions
 
@@ -56,7 +56,7 @@ This assumption must be reviewed when retention, shelf, cable routing, and wall 
 
 ## Review findings and gates
 
-1. The parameter set captures accepted values and visibly labels provisional cable/keep-out assumptions.
+1. Sketch dimensions, construction-plane offsets, and extrusion extents reference the Fusion user-parameter expressions directly; the confirmed USB horizontal datum is 59 mm from the left device edge, while cable-envelope and keep-out assumptions remain provisional.
 2. The Faceplate establishes the intended architectural outline, but active-display and gesture clearance must verify the 0.5 mm overlap.
 3. The DockBody demonstrates only the rear packaging footprint; stability and wall attachment cannot yet be assessed.
 4. Caliper measurements, a corner-radius coupon, and a physical fit coupon are required before full-size printing.
