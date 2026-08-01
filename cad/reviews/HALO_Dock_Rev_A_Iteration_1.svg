@@ -21,19 +21,22 @@
   <text x="575" y="132" class="label">SIDE / LAYER STACK</text>
   <rect x="500" y="190" width="36" height="360" fill="#656b70"/>
   <rect x="536" y="190" width="96" height="360" fill="#9ba1a4"/>
-  <rect x="635" y="180" width="24" height="380" fill="#222"/>
+  <rect x="632" y="180" width="8" height="380" fill="#222"/>
+  <rect x="616" y="160" width="16" height="30" fill="#222"/>
+  <rect x="616" y="550" width="16" height="30" fill="#222"/>
   <path d="M474 190v360" class="dash"/>
   <text x="420" y="580" class="note">wall datum</text>
   <text x="490" y="610" class="note">DockBody</text>
   <text x="545" y="635" class="note">TabletEnvelope</text>
-  <text x="626" y="610" class="note">Faceplate</text>
+  <text x="626" y="610" class="note">Faceplate lip</text>
+  <text x="600" y="145" class="dim">rear skirt outside tablet envelope</text>
   <path d="M474 165h26" class="line"/><path d="M474 158v14M500 158v14" class="line"/>
   <text x="460" y="145" class="dim">1.5 mm shadow gap (parameter only)</text>
 
   <rect x="760" y="145" width="380" height="440" rx="12" fill="#fff" stroke="#bbb"/>
   <text x="790" y="185" class="label">ITERATION 1 SCOPE</text>
   <circle cx="800" cy="224" r="6" fill="#27804b"/><text x="820" y="230" class="note">TabletEnvelope reference body</text>
-  <circle cx="800" cy="260" r="6" fill="#27804b"/><text x="820" y="266" class="note">Faceplate frame</text>
+  <circle cx="800" cy="260" r="6" fill="#27804b"/><text x="820" y="266" class="note">Faceplate lip + perimeter skirt</text>
   <circle cx="800" cy="296" r="6" fill="#27804b"/><text x="820" y="302" class="note">Planar DockBody backing</text>
   <text x="790" y="352" class="label">DEFERRED</text>
   <text x="790" y="386" class="note">USB routing and cable chamber</text>
