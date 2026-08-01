@@ -178,6 +178,32 @@ def _extrude(component, profile, distance_expression, operation=adsk.fusion.Feat
     return extrudes.add(feature_input)
 
 
+def _validate_iteration_1_layer_stack(design):
+    device_thickness = _mm(design, 'device_thickness')
+    screen_recess = _mm(design, 'screen_recess')
+    front_thickness = _mm(design, 'front_thickness')
+    clearance_x = _mm(design, 'pocket_clearance_x')
+    clearance_y = _mm(design, 'pocket_clearance_y')
+
+    if front_thickness <= screen_recess:
+        raise RuntimeError('front_thickness must be greater than screen_recess to leave a rear perimeter skirt.')
+    if clearance_x < 0 or clearance_y < 0:
+        raise RuntimeError('Pocket clearances must be non-negative so the Faceplate skirt stays outside TabletEnvelope.')
+
+    skirt_rear_z = device_thickness + screen_recess - front_thickness
+    skirt_front_z = skirt_rear_z + (front_thickness - screen_recess)
+    lip_rear_z = device_thickness
+    lip_front_z = lip_rear_z + screen_recess
+
+    tolerance = 1e-6
+    if skirt_front_z - device_thickness > tolerance:
+        raise RuntimeError('Faceplate perimeter skirt would extend forward into the TabletEnvelope depth.')
+    if abs(lip_rear_z - device_thickness) > tolerance:
+        raise RuntimeError('Faceplate lip rear plane must start at the tablet display plane.')
+    if abs(lip_front_z - (device_thickness + screen_recess)) > tolerance:
+        raise RuntimeError('Faceplate lip front plane must preserve screen_recess ahead of the display.')
+
+
 def _offset_plane(component, expression, name):
     plane_input = component.constructionPlanes.createInput()
     plane_input.setByOffset(
@@ -216,25 +242,33 @@ def _ring_profile(sketch):
 
 
 def _build_faceplate(design, root):
-    # The rear plane is derived so the extruded front is exactly screen_recess
-    # ahead of the tablet display plane at device_thickness.
+    # Split the Faceplate so the visible lip sits in front of the tablet while
+    # the remaining structural depth is only a perimeter skirt outside the
+    # TabletEnvelope. This preserves the 0.8 mm recess without body collision.
     component = _new_component(root, 'Faceplate')
-    rear_plane = _offset_plane(
+    lip_rear_plane = _offset_plane(
+        component,
+        'device_thickness',
+        'Faceplate lip rear plane (tablet display datum)',
+    )
+    skirt_rear_plane = _offset_plane(
         component,
         'device_thickness + screen_recess - front_thickness',
-        'Faceplate rear plane (parameter driven)',
+        'Faceplate skirt rear plane (parameter driven)',
     )
-    sketch = component.sketches.add(rear_plane)
-    sketch.name = 'Faceplate outer edge and display opening'
 
     device_width = _mm(design, 'device_width')
     device_height = _mm(design, 'device_height')
     device_radius = _mm(design, 'device_corner_radius')
     bezel = _mm(design, 'bezel_width')
     lip = _mm(design, 'inner_lip_overlap')
+    clearance_x = _mm(design, 'pocket_clearance_x')
+    clearance_y = _mm(design, 'pocket_clearance_y')
 
+    lip_sketch = component.sketches.add(lip_rear_plane)
+    lip_sketch.name = 'Faceplate visible lip and display opening'
     _rounded_rectangle(
-        sketch,
+        lip_sketch,
         device_width + (2 * bezel),
         device_height + (2 * bezel),
         device_radius + bezel,
@@ -243,7 +277,7 @@ def _build_faceplate(design, root):
         'device_corner_radius + bezel_width',
     )
     _rounded_rectangle(
-        sketch,
+        lip_sketch,
         device_width - (2 * lip),
         device_height - (2 * lip),
         max(device_radius - lip, 0),
@@ -251,10 +285,37 @@ def _build_faceplate(design, root):
         'device_height - 2 * inner_lip_overlap',
         'device_corner_radius - inner_lip_overlap',
     )
-    feature = _extrude(component, _ring_profile(sketch), 'front_thickness')
-    feature.name = 'Visible bezel and screen lip'
-    body = feature.bodies.item(0)
-    body.name = 'HALO Faceplate Rev A'
+    lip_feature = _extrude(component, _ring_profile(lip_sketch), 'screen_recess')
+    lip_feature.name = 'Visible front lip - display recess'
+    lip_feature.bodies.item(0).name = 'HALO Faceplate Rev A - front lip'
+
+    skirt_sketch = component.sketches.add(skirt_rear_plane)
+    skirt_sketch.name = 'Faceplate rear perimeter skirt outside TabletEnvelope'
+    _rounded_rectangle(
+        skirt_sketch,
+        device_width + (2 * bezel),
+        device_height + (2 * bezel),
+        device_radius + bezel,
+        'device_width + 2 * bezel_width',
+        'device_height + 2 * bezel_width',
+        'device_corner_radius + bezel_width',
+    )
+    _rounded_rectangle(
+        skirt_sketch,
+        device_width + (2 * clearance_x),
+        device_height + (2 * clearance_y),
+        device_radius + clearance_x,
+        'device_width + 2 * pocket_clearance_x',
+        'device_height + 2 * pocket_clearance_y',
+        'device_corner_radius + pocket_clearance_x',
+    )
+    skirt_feature = _extrude(
+        component,
+        _ring_profile(skirt_sketch),
+        'front_thickness - screen_recess',
+    )
+    skirt_feature.name = 'Rear perimeter skirt - outside tablet envelope'
+    skirt_feature.bodies.item(0).name = 'HALO Faceplate Rev A - rear perimeter skirt'
     return component
 
 
@@ -329,6 +390,7 @@ def run(context):
         design.designType = adsk.fusion.DesignTypes.ParametricDesignType
         root = design.rootComponent
         _set_parameters(design)
+        _validate_iteration_1_layer_stack(design)
         _build_tablet_envelope(design, root)
         faceplate = _build_faceplate(design, root)
         dock_body = _build_dock_body(design, root)
