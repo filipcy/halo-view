@@ -227,6 +227,12 @@ class Sprint3StaticGuards(unittest.TestCase):
         self.assertIn("'faceplate_cable_coupon_width'", validator)
         self.assertIn("COUPON_PART_IDS['guide']", validator)
         self.assertIn("'coupon_shelf_width'", validator)
+        self.assertIn("'coupon_fit_outer_width_' + safe", validator)
+        self.assertIn("'coupon_fit_outer_height'", validator)
+        self.assertIn("'lower_support_thickness'", validator)
+        self.assertIn('existing_bodies.append', validator)
+        self.assertIn('existing.name', validator)
+        self.assertIn('existing.volume', validator)
         coupon_branch = next(
             n for n in ast.walk(function('_export_outputs'))
             if isinstance(n, ast.If) and
@@ -295,8 +301,33 @@ class Sprint3StaticGuards(unittest.TestCase):
         fit = ast.unparse(function('_build_clearance_coupon'))
         wall = ast.unparse(function('_build_wall_coupon_field'))
         self.assertIn('JoinFeatureOperation', guide)
-        self.assertIn('JoinFeatureOperation', fit)
+        self.assertNotIn('JoinFeatureOperation', fit)
+        self.assertIn('CutFeatureOperation', fit)
         self.assertIn('measurement[0] > 0', wall)
+
+    def test_clearance_coupons_are_one_block_minus_open_slot(self):
+        fit = ast.unparse(function('_build_clearance_coupon'))
+        self.assertNotIn('JoinFeatureOperation', fit)
+        self.assertEqual(fit.count('_extrude('), 2)
+        self.assertEqual(fit.count('NewBodyFeatureOperation'), 1)
+        self.assertEqual(fit.count('CutFeatureOperation'), 1)
+        self.assertIn('CutFeatureOperation', fit)
+        self.assertIn("f'device_thickness + 2 * {parameter_name}'", fit)
+        self.assertIn("f'{slot_width} + 2 * coupon_fit_rail_width'", fit)
+        self.assertIn("'coupon_fit_outer_height'", fit)
+        self.assertIn("'coupon_fit_slot_cut_height'", fit)
+        self.assertIn("'coupon_fit_slot_cut_center_y'", fit)
+        self.assertIn("'lower_support_thickness'", fit)
+        self.assertIn(
+            "('coupon_fit_outer_height', 'coupon_fit_rail_length + coupon_fit_base_height / 2'",
+            SOURCE)
+        self.assertIn(
+            "('coupon_fit_slot_cut_height', 'coupon_fit_outer_height - coupon_fit_base_height + 1 mm'",
+            SOURCE)
+        self.assertEqual([8 + 2 * c for c in (0.2, 0.3, 0.4)], [8.4, 8.6, 8.8])
+        self.assertEqual([8 + 2 * c + 6 for c in (0.2, 0.3, 0.4)], [14.4, 14.6, 14.8])
+        self.assertEqual(30 + 3 / 2, 31.5)
+        self.assertIn("('lower_support_thickness', '3 mm'", SOURCE)
 
     def test_wall_fields_are_separate_controlled_parts(self):
         run = ast.unparse(function('run'))
@@ -324,11 +355,6 @@ class Sprint3StaticGuards(unittest.TestCase):
             ('wall_coupon_center_x', 'wall_coupon_center_x_left'),
         ):
             self.assertIn(f"('{left}', '-{right}'", SOURCE)
-        # Fit-gauge left centres are expressions derived from right centres,
-        # and both rails are generated through the same loop.
-        fit = ast.unparse(function('_build_clearance_coupon'))
-        self.assertIn("center_left, '-' + center_right", fit)
-        self.assertIn("('Right', center_right), ('Left', center_left)", fit)
 
     def test_manifest_matches_every_generated_stl_name(self):
         manifest = (ROOT / 'manufacturing/HALO_Dock_Rev_A_External_Print_Candidate/PART_MANIFEST.md').read_text()

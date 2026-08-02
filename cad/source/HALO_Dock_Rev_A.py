@@ -104,6 +104,10 @@ PARAMETERS = (
     ('coupon_fit_rail_length', '30 mm', 'Coupons', 'Compact clearance-gauge rail length'),
     ('coupon_fit_rail_width', '3 mm', 'Coupons', 'Clearance-gauge structural rail width'),
     ('coupon_fit_base_height', '3 mm', 'Coupons', 'Clearance-gauge connecting base height'),
+    ('coupon_fit_outer_height', 'coupon_fit_rail_length + coupon_fit_base_height / 2', 'Coupons', 'Controlled clearance-coupon Y extent; 31.5 mm'),
+    ('coupon_fit_outer_center_y', '0 mm', 'Coupons', 'Clearance-coupon outer block Y centre'),
+    ('coupon_fit_slot_cut_height', 'coupon_fit_outer_height - coupon_fit_base_height + 1 mm', 'Coupons', 'Slot reaches 1 mm beyond the open insertion end'),
+    ('coupon_fit_slot_cut_center_y', '-coupon_fit_outer_height / 2 + coupon_fit_base_height + coupon_fit_slot_cut_height / 2', 'Coupons', 'Slot leaves the controlled 3 mm base at the closed end'),
     ('selected_clearance_coupon_slot_width', 'device_thickness + 2 * 0.3 mm', 'Coupons', '0.3 mm candidate slot selected provisionally for full-model depth parity'),
     # Exact engaged thickness must be measured on the selected mated pair.
     ('dual_lock_pad_width', '25 mm', 'Wall interface', 'Flat hidden mounting field width'),
@@ -1071,42 +1075,32 @@ def _build_clearance_coupon(design, root, clearance_text):
     # A dedicated parameter preserves each candidate rather than mutating the
     # selected assembly clearance.
     parameter_name = 'coupon_fit_clearance_' + safe
-    center_right = 'coupon_fit_center_x_' + safe
-    center_left = center_right + '_left'
-    base_width = 'coupon_fit_base_width_' + safe
-    rail_center_y = 'coupon_fit_rail_center_y_' + safe
-    base_center_y = 'coupon_fit_base_center_y_' + safe
+    slot_width = 'coupon_fit_slot_width_' + safe
+    outer_width = 'coupon_fit_outer_width_' + safe
     _ensure_parameter(design, parameter_name, clearance_text + ' mm',
                       'Per-side candidate clearance')
     _ensure_parameter(
-        design, center_right,
-        f'device_thickness / 2 + {parameter_name} + coupon_fit_rail_width / 2',
-        'Right clearance-gauge rail centre magnitude')
-    _ensure_parameter(design, center_left, '-' + center_right,
-                      'Left clearance-gauge rail centre')
+        design, slot_width,
+        f'device_thickness + 2 * {parameter_name}',
+        'Controlled clearance-coupon slot width')
     _ensure_parameter(
-        design, base_width,
-        f'device_thickness + 2 * {parameter_name} + 2 * coupon_fit_rail_width',
+        design, outer_width,
+        f'{slot_width} + 2 * coupon_fit_rail_width',
         'Connected clearance-gauge outside width')
-    _ensure_parameter(design, rail_center_y, '-coupon_fit_base_height / 2',
-                      'Rail centre overlaps the connecting base')
-    _ensure_parameter(
-        design, base_center_y,
-        '-coupon_fit_rail_length / 2 - coupon_fit_base_height / 2',
-        'Connecting base centre below the insertion slot')
 
-    base_sketch = component.sketches.add(component.xYConstructionPlane)
-    base = _extrude(component, _centered_rectangle_profile(
-        base_sketch, design, base_width, 'coupon_fit_base_height',
-        'dock_center_x', base_center_y), 'lower_support_thickness')
-    base.name = 'Connected fit-gauge base ' + clearance_text + ' mm'
-    for side, center_x in (('Right', center_right), ('Left', center_left)):
-        sketch = component.sketches.add(component.xYConstructionPlane)
-        rail = _extrude(component, _centered_rectangle_profile(
-            sketch, design, 'coupon_fit_rail_width', 'coupon_fit_rail_length',
-            center_x, rail_center_y), 'lower_support_thickness',
-            adsk.fusion.FeatureOperations.JoinFeatureOperation)
-        rail.name = side + ' fit gauge rail ' + clearance_text + ' mm'
+    outer_sketch = component.sketches.add(component.xYConstructionPlane)
+    outer = _extrude(component, _centered_rectangle_profile(
+        outer_sketch, design, outer_width, 'coupon_fit_outer_height',
+        'dock_center_x', 'coupon_fit_outer_center_y'), 'lower_support_thickness',
+        adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+    outer.name = 'One-piece clearance coupon outer block ' + clearance_text + ' mm'
+    slot_sketch = component.sketches.add(component.xYConstructionPlane)
+    slot = _extrude(component, _centered_rectangle_profile(
+        slot_sketch, design, slot_width, 'coupon_fit_slot_cut_height',
+        'dock_center_x', 'coupon_fit_slot_cut_center_y'),
+        'lower_support_thickness',
+        adsk.fusion.FeatureOperations.CutFeatureOperation)
+    slot.name = 'Open insertion slot ' + clearance_text + ' mm per side'
     return component
 
 
@@ -1175,6 +1169,20 @@ def _validate_printable_coupon(component, part_id):
         bounds.maxPoint.y - bounds.minPoint.y,
         bounds.maxPoint.z - bounds.minPoint.z,
     ) if bounds else (0.0, 0.0, 0.0)
+    existing_bodies = []
+    for index in range(body_count):
+        existing = component.bRepBodies.item(index)
+        existing_bounds = existing.preciseBoundingBox
+        existing_extents = (
+            existing_bounds.maxPoint.x - existing_bounds.minPoint.x,
+            existing_bounds.maxPoint.y - existing_bounds.minPoint.y,
+            existing_bounds.maxPoint.z - existing_bounds.minPoint.z)
+        existing_bodies.append(
+            '    [{}] {}: isValid={}, isSolid={}, volume={:.6f} mm^3, '
+            'X/Y/Z={:.3f}/{:.3f}/{:.3f} mm'.format(
+                index, existing.name, existing.isValid, existing.isSolid,
+                existing.volume * 1000, existing_extents[0] * 10,
+                existing_extents[1] * 10, existing_extents[2] * 10))
 
     def _failure(reason):
         return RuntimeError(
@@ -1188,7 +1196,8 @@ def _validate_printable_coupon(component, part_id):
             '\n  face/edge/vertex counts: {}/{}/{}'.format(
                 faces, edges, vertices) +
             '\n  precise X/Y/Z extents (mm): {:.3f}, {:.3f}, {:.3f}'.format(
-                extents[0] * 10, extents[1] * 10, extents[2] * 10))
+                extents[0] * 10, extents[1] * 10, extents[2] * 10) +
+            '\n  existing bodies:\n' + '\n'.join(existing_bodies))
 
     if (body_count != 1 or not body or not is_valid or not is_solid or
             volume <= 0 or faces <= 0 or edges <= 0 or vertices <= 0 or
@@ -1199,13 +1208,27 @@ def _validate_printable_coupon(component, part_id):
     design = component.parentDesign
     tolerance = 0.01  # Fusion internal centimetres: 0.1 mm.
     expected_x = None
+    expected_y = None
+    expected_z = None
     if part_id == COUPON_PART_IDS['faceplate_cable']:
         expected_x = _mm(design, 'faceplate_cable_coupon_width')
     elif part_id == COUPON_PART_IDS['guide']:
         expected_x = _mm(design, 'coupon_shelf_width')
-    if expected_x is not None and abs(extents[0] - expected_x) > tolerance:
+    else:
+        for clearance, safe in (('0.2', '0_2'), ('0.3', '0_3'), ('0.4', '0_4')):
+            if part_id == COUPON_PART_IDS[clearance]:
+                expected_x = _mm(design, 'coupon_fit_outer_width_' + safe)
+                expected_y = _mm(design, 'coupon_fit_outer_height')
+                expected_z = _mm(design, 'lower_support_thickness')
+    controlled = (
+        (extents[0], expected_x),
+        (extents[1], expected_y),
+        (extents[2], expected_z),
+    )
+    if any(expected is not None and abs(actual - expected) > tolerance
+           for actual, expected in controlled):
         raise _failure(
-            'Coupon export blocked: controlled X extent is outside 0.1 mm tolerance.')
+            'Coupon export blocked: controlled extent is outside 0.1 mm tolerance.')
 
 
 def _validate_full_size_release(design):
