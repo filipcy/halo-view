@@ -102,8 +102,17 @@ class Sprint3StaticGuards(unittest.TestCase):
         self.assertIn(
             'sketch.originPoint, outer_side.endSketchPoint', profile)
         self.assertEqual(profile.count("'coupon_corner_arm_length'"), 3)
-        self.assertIn('outer_top.endSketchPoint', profile)
-        self.assertIn('inner_side.endSketchPoint', profile)
+        self.assertNotIn('-3.141592653589793 / 2', profile)
+        self.assertIn(
+            "Point3D.create(-arm, 0, 0), outer_arc.endSketchPoint", profile)
+        self.assertIn(
+            'outer_arc.startSketchPoint, adsk.core.Point3D.create(0, -arm, 0)',
+            profile)
+        self.assertIn(
+            'side_end.endSketchPoint, inner_arc.startSketchPoint', profile)
+        self.assertIn(
+            'inner_arc.endSketchPoint, adsk.core.Point3D.create(-arm, -band, 0)',
+            profile)
         self.assertNotIn('constraints.addCoincident', profile)
         self.assertNotIn('addVertical(outer_side)', profile)
         self.assertNotIn('addVertical(inner_side)', profile)

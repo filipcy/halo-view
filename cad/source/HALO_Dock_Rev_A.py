@@ -704,26 +704,24 @@ def _open_corner_l_profile(sketch, design, band_expression):
     center = (-radius, -radius)
     lines = sketch.sketchCurves.sketchLines
     arcs = sketch.sketchCurves.sketchArcs
-    outer_top = lines.addByTwoPoints(
-        adsk.core.Point3D.create(-arm, 0, 0),
-        adsk.core.Point3D.create(-radius, 0, 0))
     outer_arc = arcs.addByCenterStartSweep(
-        adsk.core.Point3D.create(center[0], center[1], 0),
-        outer_top.endSketchPoint,
-        -3.141592653589793 / 2,
-    )
-    outer_side = lines.addByTwoPoints(
-        outer_arc.endSketchPoint, adsk.core.Point3D.create(0, -arm, 0))
-    side_end = lines.addByTwoPoints(
-        outer_side.endSketchPoint, adsk.core.Point3D.create(-band, -arm, 0))
-    inner_side = lines.addByTwoPoints(
-        side_end.endSketchPoint,
-        adsk.core.Point3D.create(-band, -radius, 0))
-    inner_arc = arcs.addByCenterStartSweep(
-        adsk.core.Point3D.create(center[0], center[1], 0),
-        inner_side.endSketchPoint,
+        adsk.core.Point3D.create(-radius, -radius, 0),
+        adsk.core.Point3D.create(0, -radius, 0),
         3.141592653589793 / 2,
     )
+    outer_top = lines.addByTwoPoints(
+        adsk.core.Point3D.create(-arm, 0, 0), outer_arc.endSketchPoint)
+    outer_side = lines.addByTwoPoints(
+        outer_arc.startSketchPoint, adsk.core.Point3D.create(0, -arm, 0))
+    side_end = lines.addByTwoPoints(
+        outer_side.endSketchPoint, adsk.core.Point3D.create(-band, -arm, 0))
+    inner_arc = arcs.addByCenterStartSweep(
+        adsk.core.Point3D.create(center[0], center[1], 0),
+        adsk.core.Point3D.create(-band, -radius, 0),
+        3.141592653589793 / 2,
+    )
+    inner_side = lines.addByTwoPoints(
+        side_end.endSketchPoint, inner_arc.startSketchPoint)
     inner_top = lines.addByTwoPoints(
         inner_arc.endSketchPoint, adsk.core.Point3D.create(-arm, -band, 0))
     top_end = lines.addByTwoPoints(inner_top.endSketchPoint, outer_top.startSketchPoint)
