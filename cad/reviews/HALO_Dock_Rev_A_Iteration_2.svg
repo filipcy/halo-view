@@ -21,14 +21,14 @@
   <text x="462" y="250" class="n">non-final retention concept only</text><path d="M455 258 H443" class="dim"/>
   <text x="735" y="135" class="s">Installed side stack</text>
   <line x1="700" y1="185" x2="700" y2="620" class="wall"/>
-  <rect x="700" y="255" width="54" height="110" class="mount"/>
+  <rect x="700" y="255" width="36" height="110" class="mount"/>
   <rect x="754" y="220" width="105" height="360" class="dock"/>
   <rect x="859" y="235" width="145" height="330" class="tablet"/>
   <rect x="1004" y="225" width="15" height="350" class="dock"/>
   <path d="M700 650 H1019 M700 638 V662 M1019 638 V662" class="dim"/>
   <text x="780" y="690" class="s">18.0 mm nominal projection</text>
   <path d="M700 395 H754 M700 385 V405 M754 385 V405" class="dim"/>
-  <text x="691" y="430" class="n">1.5 mm actual shadow gap</text>
+  <text x="691" y="430" class="n">1.5 mm gap; discrete 1.0 mm pad</text>
   <text x="663" y="242" class="n">wall</text>
   <text x="708" y="290" class="n" transform="rotate(90 708 290)">hidden flat Dual Lock field</text>
   <text x="775" y="205" class="n">projection-controlled backing</text>

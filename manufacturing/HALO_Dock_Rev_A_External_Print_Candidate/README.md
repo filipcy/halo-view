@@ -23,7 +23,7 @@ The supplier **must print at exactly 100% scale**. Scaling, shrink compensation 
 1. Quote and print the three per-side clearance coupons: 0.2 mm, 0.3 mm, and 0.4 mm.
 2. Print the representative Faceplate corner/lip section to review the visible corner, lip overlap, layer quality, and front-face finish.
 3. Print the side-guide + lower-shelf section to test tablet insertion, shelf seating, guide stiffness, and support-free orientation.
-4. Print the wall-stack coupon to review the two flat Dual Lock mounting fields and visible 1.5 mm shadow-gap concept.
+4. Print the wall-stack coupon on its documented edge to review two discrete flat Dual Lock mounting fields, their provisional 1.0 mm engaged thickness, and the visible open volume around them within the 1.5 mm shadow-gap concept. A thin lower datum bridge keeps the coupon connected; it is not a mounting field. The pads must not be merged into a full-area solid spacer.
 5. Ship coupons for receiving inspection. Do not start the full-size Faceplate or DockBody without written purchaser authorization identifying the accepted coupon result.
 
 ## Full-size print candidates
@@ -31,6 +31,8 @@ The supplier **must print at exactly 100% scale**. Scaling, shrink compensation 
 The full-size `Faceplate_PRINT_CANDIDATE` and `DockBody_PRINT_CANDIDATE` files are **PRINT CANDIDATE ONLY**. They are included for quotation and manufacturability review, not as authorization to manufacture. They are not production-released, and neither may be substituted for a coupon-first approval.
 
 Provisional orientation is Faceplate front face down and DockBody wall-side face down. The supplier must propose any orientation change before slicing and show that it remains support-free. Do not add support-contact scars to visible or tablet-contact faces.
+
+Print the wall-stack coupon on the long lower datum-bridge edge so both witness panels and the discrete pad geometry build vertically without supports. The open regions around and forward of the pads must remain open.
 
 ## Process controls and reporting
 

@@ -21,6 +21,7 @@ Use this checklist for each quotation. A checked RFQ confirms understanding, not
 - [ ] Coupon price, setup price, shipping, tax, and lead time itemized separately from full-size candidates.
 - [ ] One each of the 0.2, 0.3, and 0.4 mm per-side clearance coupons included.
 - [ ] Faceplate corner/lip, side-guide + lower-shelf, and wall-stack coupons included.
+- [ ] Wall-stack preflight shows two discrete pad fields and visible open gap around them, not a solid 1.5 mm spacer.
 - [ ] Full-size Faceplate and DockBody quoted as optional **PRINT CANDIDATE ONLY**, with printing held pending written authorization.
 
 ## Quality and logistics

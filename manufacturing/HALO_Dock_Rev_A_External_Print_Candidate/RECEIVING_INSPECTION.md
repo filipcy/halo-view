@@ -30,12 +30,12 @@ Record measurements with calibrated tools and do not infer acceptance from nomin
 | 0.4 mm clearance per side | [ ] | ______ mm | loose / acceptable / tight / no-fit | ______ |
 | Faceplate corner/lip | [ ] | lip ______; recess ______ | finish/overlap notes: ______ | ______ |
 | Side-guide + lower-shelf | [ ] | guide gap ______; shelf ______ | insertion/seating notes: ______ | ______ |
-| Wall stack/shadow gap | [ ] | gap ______; field ______ × ______ | visibility/flatness notes: ______ | ______ |
+| Wall stack/shadow gap | [ ] | gap ______; pad thickness ______; field ______ × ______ | open-gap/flatness notes: ______ | ______ |
 
 - [ ] Fit coupons were tested on the intended bare tablet or a controlled gauge, without forcing.
 - [ ] Faceplate coupon corner and lip are free of lift and sharp unintended artifacts.
 - [ ] Guide/shelf coupon allows straight insertion and full lower seating without cracking or permanent deformation.
-- [ ] Wall coupon clearly demonstrates two flat mounting fields and the nominal 1.5 mm visible shadow-gap concept.
+- [ ] Wall coupon clearly demonstrates two discrete flat mounting fields, provisional 1.0 mm engaged thickness, and open volume around them within the nominal 1.5 mm visible shadow-gap concept; only the labeled lower datum bridge spans the gap continuously.
 
 ## Disposition
 

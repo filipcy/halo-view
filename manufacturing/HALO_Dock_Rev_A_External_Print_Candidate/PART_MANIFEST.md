@@ -11,7 +11,7 @@
 | `Coupon_Clearance_0p4mm_Per_Side` | 1 | FIT COUPON | Tablet-thickness slot with 0.4 mm clearance on each side |
 | `Coupon_Faceplate_Corner_Lip` | 1 | FIT/FINISH COUPON | Representative rounded Faceplate corner, skirt, bezel, and display lip |
 | `Coupon_Side_Guide_Lower_Shelf` | 1 | INSERTION COUPON | Representative paired-guide and lower-shelf insertion section |
-| `Coupon_Wall_Stack_Shadow_Gap` | 1 | WALL CONCEPT COUPON | Paired flat Dual Lock fields and visible 1.5 mm shadow-gap stack |
+| `Coupon_Wall_Stack_Shadow_Gap` | 1 | WALL CONCEPT COUPON | Discrete 1.0 mm engaged Dual Lock pads with visible open volume in the 1.5 mm shadow-gap stack |
 | `Faceplate_PRINT_CANDIDATE` | 0 unless separately authorized | **FULL-SIZE PRINT CANDIDATE ONLY** | Full-size Rev A Faceplate quotation/preflight |
 | `DockBody_PRINT_CANDIDATE` | 0 unless separately authorized | **FULL-SIZE PRINT CANDIDATE ONLY** | Full-size Rev A DockBody quotation/preflight |
 

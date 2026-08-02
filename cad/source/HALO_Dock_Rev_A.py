@@ -50,6 +50,7 @@ PARAMETERS = (
     ('dual_lock_pad_width', '25 mm', 'Wall interface', 'Flat hidden mounting field width'),
     ('dual_lock_pad_height', '50 mm', 'Wall interface', 'Flat hidden mounting field height'),
     ('dual_lock_pad_edge_offset', '12 mm', 'Wall interface', 'Field offset from DockBody side edge'),
+    ('dual_lock_engaged_thickness', '1.0 mm', 'Wall interface', 'Provisional engaged pad stack; intentionally less than visible shadow gap'),
     ('dual_lock_center_x', 'device_width / 2 + pocket_clearance_x + dock_side_wall - dual_lock_pad_edge_offset - dual_lock_pad_width / 2', 'Wall interface', 'Hidden mounting field centre magnitude'),
     ('dual_lock_center_x_left', '-dual_lock_center_x', 'Wall interface', 'Left hidden mounting field centre'),
     ('dual_lock_center_y', '0 mm', 'Wall interface', 'Hidden mounting field vertical centre'),
@@ -88,6 +89,8 @@ PARAMETERS = (
     ('coupon_wall_panel_height', '70 mm', 'Print coupons', 'Wall-stack coupon height'),
     ('coupon_wall_field_center_x', '17.5 mm', 'Print coupons', 'Wall-stack field centre magnitude'),
     ('coupon_wall_field_center_x_left', '-coupon_wall_field_center_x', 'Print coupons', 'Wall-stack left field centre'),
+    ('coupon_shadow_bridge_height', '3 mm', 'Print coupons', 'Thin lower datum bridge that keeps wall coupon connected'),
+    ('coupon_shadow_bridge_center_y', '-coupon_wall_panel_height / 2 + coupon_shadow_bridge_height / 2', 'Print coupons', 'Lower datum bridge location outside mounting fields'),
     ('usb_port_datum_x', '59 mm', 'Reserved', 'Confirmed horizontal datum from the left device edge'),
     ('usb_port_datum_y', '1 mm', 'Reserved', 'Approximate lower-edge offset; requires confirmation'),
     ('usb_opening_width', '8 mm', 'Reserved', 'Approximate port opening width'),
@@ -273,23 +276,46 @@ def _centered_rectangle_profile(
         ),
         height_name,
     )
-    lower_left = bottom.startSketchPoint
-    x_dim = dims.addDistanceDimension(
-        sketch.originPoint,
-        lower_left,
-        horizontal,
-        adsk.core.Point3D.create(cx / 2, cy - height, 0),
+    # Constrain the rectangle through its actual centre. Keeping the signed
+    # centre expressions here is what allows left/right parameters to rebuild
+    # as true mirrors rather than collapsing onto the positive side.
+    centre_point = sketch.sketchPoints.add(
+        adsk.core.Point3D.create(cx, cy, 0),
     )
-    y_dim = dims.addDistanceDimension(
-        sketch.originPoint,
-        lower_left,
-        vertical,
-        adsk.core.Point3D.create(cx - width, cy / 2, 0),
+    diagonal = sketch.sketchCurves.sketchLines.addByTwoPoints(
+        bottom.startSketchPoint,
+        right.endSketchPoint,
     )
-    # Distance dimensions are unsigned; the initial point quadrant preserves
-    # direction while abs() keeps a legal expression on every side.
-    _set_dimension_expression(x_dim, f'abs(({center_x}) - ({width_name}) / 2)')
-    _set_dimension_expression(y_dim, f'abs(({center_y}) - ({height_name}) / 2)')
+    diagonal.isConstruction = True
+    constraints = sketch.geometricConstraints
+    constraints.addMidPoint(centre_point, diagonal)
+
+    tolerance = 1e-9
+    x_is_zero = -tolerance <= cx <= tolerance
+    y_is_zero = -tolerance <= cy <= tolerance
+    if x_is_zero and y_is_zero:
+        constraints.addCoincident(centre_point, sketch.originPoint)
+    else:
+        if x_is_zero:
+            constraints.addVertical(sketch.originPoint, centre_point)
+        else:
+            x_dim = dims.addDistanceDimension(
+                sketch.originPoint,
+                centre_point,
+                horizontal,
+                adsk.core.Point3D.create(cx / 2, cy - height, 0),
+            )
+            _set_dimension_expression(x_dim, center_x)
+        if y_is_zero:
+            constraints.addHorizontal(sketch.originPoint, centre_point)
+        else:
+            y_dim = dims.addDistanceDimension(
+                sketch.originPoint,
+                centre_point,
+                vertical,
+                adsk.core.Point3D.create(cx - width, cy / 2, 0),
+            )
+            _set_dimension_expression(y_dim, center_y)
     return sketch.profiles.item(sketch.profiles.count - 1)
 
 
@@ -328,6 +354,8 @@ def _validate_iteration_2_geometry(design):
         raise RuntimeError('Installed layer stack does not meet total_projection_target.')
     if _mm(design, 'wall_shadow_gap') <= 0:
         raise RuntimeError('wall_shadow_gap must create a positive physical separation.')
+    if not 0 < _mm(design, 'dual_lock_engaged_thickness') < _mm(design, 'wall_shadow_gap'):
+        raise RuntimeError('dual_lock_engaged_thickness must be positive and must not fill the wall shadow gap.')
     if _mm(design, 'guide_depth') > device_thickness + tolerance:
         raise RuntimeError('Guide depth must not project in front of the tablet display plane.')
     if _mm(design, 'retention_concept_width') <= 0:
@@ -348,6 +376,22 @@ def _validate_iteration_2_geometry(design):
         raise RuntimeError('Retention concept would intersect TabletEnvelope.')
     if guide_top_y >= device_half_height - tolerance or retention_top_y > device_half_height + tolerance:
         raise RuntimeError('Guide or retention geometry would obstruct the fully open top insertion path.')
+
+    mirror_pairs = (
+        ('side guides', 'guide_center_x', 'guide_center_x_left'),
+        ('retention features', 'retention_center_x', 'retention_center_x_left'),
+        ('0.2 mm coupon rails', 'coupon_rail_center_020', 'coupon_rail_center_020_left'),
+        ('0.3 mm coupon rails', 'coupon_rail_center_030', 'coupon_rail_center_030_left'),
+        ('0.4 mm coupon rails', 'coupon_rail_center_040', 'coupon_rail_center_040_left'),
+        ('guide coupon rails', 'coupon_guide_center_x', 'coupon_guide_center_x_left'),
+        ('Dual Lock fields', 'dual_lock_center_x', 'dual_lock_center_x_left'),
+        ('wall coupon fields', 'coupon_wall_field_center_x', 'coupon_wall_field_center_x_left'),
+    )
+    for label, right_name, left_name in mirror_pairs:
+        right = _mm(design, right_name)
+        left = _mm(design, left_name)
+        if right <= 0 or left >= 0 or abs(right + left) > tolerance:
+            raise RuntimeError(label + ' must remain symmetric about the centre datum.')
 
 
 def _offset_plane(component, expression, name):
@@ -574,7 +618,7 @@ def _build_wall_interface(design, root):
                 center_x,
                 'dual_lock_center_y',
             ),
-            'wall_shadow_gap',
+            'dual_lock_engaged_thickness',
         )
         field.name = side + ' 3M Dual Lock field - prototype'
         field.bodies.item(0).name = side + ' hidden flat mounting field'
@@ -701,7 +745,7 @@ def _build_guide_shelf_coupon(design, root):
 
 def _build_wall_stack_coupon(design, root):
     component = _new_component(root, 'Coupon_Wall_Stack_Shadow_Gap')
-    component.description = 'PRINT COUPON: wall, two flat Dual Lock fields, Dock panel, and visible 1.5 mm gap.'
+    component.description = 'PRINT COUPON: wall and Dock witnesses with discrete Dual Lock pads and open shadow-gap volume.'
     wall_plane = _offset_plane(
         component,
         '-coupon_wall - wall_shadow_gap',
@@ -713,7 +757,28 @@ def _build_wall_stack_coupon(design, root):
         ('Right Dual Lock field', 'coupon_wall_field_center_x'),
         ('Left Dual Lock field', 'coupon_wall_field_center_x_left'),
     ):
-        _add_coupon_box(component, design, side, 'dual_lock_pad_width', 'dual_lock_pad_height', center_x, 'coupon_center_y', 'wall_shadow_gap', field_plane)
+        _add_coupon_box(
+            component,
+            design,
+            side,
+            'dual_lock_pad_width',
+            'dual_lock_pad_height',
+            center_x,
+            'coupon_center_y',
+            'dual_lock_engaged_thickness',
+            field_plane,
+        )
+    _add_coupon_box(
+        component,
+        design,
+        'Lower shadow-gap datum bridge - not a mounting field',
+        'coupon_wall_panel_width',
+        'coupon_shadow_bridge_height',
+        'dock_center_x',
+        'coupon_shadow_bridge_center_y',
+        'wall_shadow_gap',
+        field_plane,
+    )
     _add_coupon_box(component, design, 'Dock witness panel', 'coupon_wall_panel_width', 'coupon_wall_panel_height', 'dock_center_x', 'coupon_center_y', 'coupon_wall')
     return component
 

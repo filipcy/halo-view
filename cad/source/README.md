@@ -11,7 +11,7 @@ The model now contains:
 - `TabletEnvelope`, a non-manufacturing reference body;
 - `Faceplate`, the visible front lip plus rear perimeter skirt; and
 - `DockBody`, with its projection-controlled backing, paired side guides, lower support shelf, and explicitly non-final paired upper side-detent concept; and
-- `WallInterface`, with two hidden flat 3M Dual Lock mounting-field bodies spanning the physical shadow gap.
+- `WallInterface`, with two discrete hidden flat 3M Dual Lock mounting-field bodies inside, but not filling, the physical shadow gap.
 - three compact U-channel fit coupons for 0.2, 0.3, and 0.4 mm clearance per tablet side;
 - a representative Faceplate rounded corner/lip coupon;
 - a side-guide + lower-shelf insertion coupon; and
@@ -21,7 +21,7 @@ The model now contains:
 
 The Faceplate component intentionally contains separate front-lip and rear-skirt solids. The lip preserves the 0.8 mm screen recess in front of the tablet display plane, while the skirt provides the remaining prototype structural depth only outside the tablet envelope.
 
-The wall datum and flat mounting fields realize `wall_shadow_gap` as a nominal 1.5 mm separation. The generator checks `wall_shadow_gap + dock_back_thickness + device_thickness + screen_recess` against `total_projection_target`; current values produce 18.0 mm. New feature sizes and locations are user parameters or expressions derived from them, and nominal guide, shelf, and retention-concept boundaries remain outside `TabletEnvelope`.
+The wall datum realizes `wall_shadow_gap` as a nominal 1.5 mm separation. Discrete pad fields use the separate 1.0 mm `dual_lock_engaged_thickness`, leaving visible open volume around them rather than turning the shadow gap into a solid slab. The generator checks `wall_shadow_gap + dock_back_thickness + device_thickness + screen_recess` against `total_projection_target`; current values produce 18.0 mm. New feature sizes and locations are user parameters or expressions derived from them, and nominal guide, shelf, and retention-concept boundaries remain outside `TabletEnvelope`.
 
 ## Output
 

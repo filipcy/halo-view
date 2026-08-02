@@ -15,7 +15,7 @@ Iteration 2 turns the accepted Iteration 1 package into a parameter-driven mecha
 | `TabletEnvelope` | 125 × 211 × 8 mm rounded reference envelope | Reference only; measurements require validation |
 | `Faceplate` | Existing split front lip and rear perimeter skirt | Fit/visual study only |
 | `DockBody` | Projection-controlled backing, paired side guides, lower shelf, and paired upper side-detent studies | Mechanical layout only |
-| `WallInterface` | Two 25 × 50 mm flat fields spanning the 1.5 mm wall separation | Mounting concept only; 3M stack/specification unvalidated |
+| `WallInterface` | Two discrete 25 × 50 mm flat fields with provisional 1.0 mm engaged thickness inside the 1.5 mm wall separation | Mounting concept only; 3M stack/specification unvalidated |
 | `Assembly` | Named placeholder | Joints and service motion deferred |
 
 Every new size and location is controlled by a named Fusion user parameter or an expression derived from one. Side guides start outside `device_width / 2 + pocket_clearance_x`; the shelf starts below `-device_height / 2 - pocket_clearance_y`; and the side detent concept occupies only the side-clearance band. These construction rules prevent new solid geometry from entering `TabletEnvelope` at nominal values.
@@ -26,7 +26,7 @@ The two guides terminate below the tablet's top edge, and no geometry spans betw
 
 ## Wall stack, shadow gap, and projection check
 
-The wall datum is modeled at `-dock_back_thickness - wall_shadow_gap`. The flat mounting-field bodies start on that plane and span the 1.5 mm separation to the DockBody rear face. This makes `wall_shadow_gap` physical geometry rather than documentation alone.
+The wall datum is modeled at `-dock_back_thickness - wall_shadow_gap`. The discrete mounting-field bodies start on that plane and use the separate `dual_lock_engaged_thickness` parameter, provisionally 1.0 mm. They intentionally do not fill the 1.5 mm separation: open shadow-gap volume remains around the two pad fields and between their forward faces and the DockBody datum. This makes the wall stack reviewable without representing the entire shadow gap as solid mounting material.
 
 The nominal installed projection is checked by the generator before body creation:
 
