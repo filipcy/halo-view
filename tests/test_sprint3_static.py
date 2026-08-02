@@ -94,10 +94,17 @@ class Sprint3StaticGuards(unittest.TestCase):
         self.assertIn('coupon_corner_arm_length', profile)
         self.assertIn('addByCenterStartSweep', profile)
         self.assertEqual(profile.count('addByCenterStartSweep'), 2)
-        self.assertIn('top_arm_datum.isConstruction = True', profile)
-        self.assertIn('side_arm_datum.isConstruction = True', profile)
-        self.assertIn('addEqual(top_arm_datum, side_arm_datum)', profile)
-        self.assertEqual(profile.count("'coupon_corner_arm_length'"), 2)
+        self.assertNotIn('top_arm_datum', profile)
+        self.assertNotIn('side_arm_datum', profile)
+        self.assertNotIn('isConstruction', profile)
+        self.assertIn(
+            'sketch.originPoint, outer_top.startSketchPoint', profile)
+        self.assertIn(
+            'sketch.originPoint, outer_side.endSketchPoint', profile)
+        self.assertEqual(profile.count("'coupon_corner_arm_length'"), 3)
+        self.assertIn('outer_top.endSketchPoint', profile)
+        self.assertIn('inner_side.endSketchPoint', profile)
+        self.assertNotIn('constraints.addCoincident', profile)
         self.assertNotIn('coupon_corner_outer_width', profile)
         self.assertNotIn('coupon_corner_outer_height', profile)
 

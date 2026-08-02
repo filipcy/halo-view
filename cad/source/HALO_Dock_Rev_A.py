@@ -698,10 +698,9 @@ def _open_corner_l_profile(sketch, design, band_expression):
         raise RuntimeError(
             'Open corner coupon requires 0 < band width < outer radius < arm length.')
 
-    # Put the theoretical sharp outer corner on the sketch origin.  Two simple
-    # construction legs define the 52 x 52 mm envelope; the equal constraint
-    # means only one arm-length dimension is required.  All solid-profile
-    # entities then depend on those datums, one band dimension, and one radius.
+    # Put the theoretical sharp outer corner on the sketch origin.  Dimension
+    # each arm endpoint directly from that fixed datum: construction lines on
+    # the arm axes would overlap the real edges and split Fusion's profile.
     center = (-radius, -radius)
     lines = sketch.sketchCurves.sketchLines
     arcs = sketch.sketchCurves.sketchArcs
@@ -710,7 +709,7 @@ def _open_corner_l_profile(sketch, design, band_expression):
         adsk.core.Point3D.create(-radius, 0, 0))
     outer_arc = arcs.addByCenterStartSweep(
         adsk.core.Point3D.create(center[0], center[1], 0),
-        adsk.core.Point3D.create(-radius, 0, 0),
+        outer_top.endSketchPoint,
         -3.141592653589793 / 2,
     )
     outer_side = lines.addByTwoPoints(
@@ -722,23 +721,14 @@ def _open_corner_l_profile(sketch, design, band_expression):
         adsk.core.Point3D.create(-band, -radius, 0))
     inner_arc = arcs.addByCenterStartSweep(
         adsk.core.Point3D.create(center[0], center[1], 0),
-        adsk.core.Point3D.create(-band, -radius, 0),
+        inner_side.endSketchPoint,
         3.141592653589793 / 2,
     )
     inner_top = lines.addByTwoPoints(
         inner_arc.endSketchPoint, adsk.core.Point3D.create(-arm, -band, 0))
     top_end = lines.addByTwoPoints(inner_top.endSketchPoint, outer_top.startSketchPoint)
 
-    top_arm_datum = lines.addByTwoPoints(
-        outer_top.startSketchPoint, sketch.originPoint)
-    side_arm_datum = lines.addByTwoPoints(
-        sketch.originPoint, outer_side.endSketchPoint)
-    top_arm_datum.isConstruction = True
-    side_arm_datum.isConstruction = True
-
     constraints = sketch.geometricConstraints
-    constraints.addCoincident(outer_top.endSketchPoint, outer_arc.startSketchPoint)
-    constraints.addCoincident(inner_side.endSketchPoint, inner_arc.startSketchPoint)
     constraints.addTangent(outer_top, outer_arc)
     constraints.addTangent(outer_arc, outer_side)
     constraints.addTangent(inner_side, inner_arc)
@@ -750,17 +740,19 @@ def _open_corner_l_profile(sketch, design, band_expression):
     constraints.addVertical(outer_side)
     constraints.addVertical(inner_side)
     constraints.addVertical(top_end)
-    constraints.addHorizontal(top_arm_datum)
-    constraints.addVertical(side_arm_datum)
-    constraints.addEqual(top_arm_datum, side_arm_datum)
 
     dims = sketch.sketchDimensions
     horizontal = adsk.fusion.DimensionOrientations.HorizontalDimensionOrientation
     vertical = adsk.fusion.DimensionOrientations.VerticalDimensionOrientation
-    arm_dimension = dims.addDistanceDimension(
-        top_arm_datum.startSketchPoint, top_arm_datum.endSketchPoint,
+    horizontal_arm_dimension = dims.addDistanceDimension(
+        sketch.originPoint, outer_top.startSketchPoint,
         horizontal, adsk.core.Point3D.create(-arm / 2, radius, 0))
-    _set_dimension_expression(arm_dimension, 'coupon_corner_arm_length')
+    _set_dimension_expression(
+        horizontal_arm_dimension, 'coupon_corner_arm_length')
+    vertical_arm_dimension = dims.addDistanceDimension(
+        sketch.originPoint, outer_side.endSketchPoint,
+        vertical, adsk.core.Point3D.create(radius, -arm / 2, 0))
+    _set_dimension_expression(vertical_arm_dimension, 'coupon_corner_arm_length')
     band_dimension = dims.addDistanceDimension(
         top_end.startSketchPoint, top_end.endSketchPoint, vertical,
         adsk.core.Point3D.create(-arm - band, -band / 2, 0))
