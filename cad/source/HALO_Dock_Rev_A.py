@@ -124,7 +124,6 @@ PARAMETERS = (
     ('cable_pocket_width', '18 mm', 'Keep-outs', 'Generic plug/cable width envelope'),
     ('cable_pocket_height', '8 mm', 'Keep-outs', 'Generic plug/cable height envelope'),
     ('cable_pocket_run_depth', '20 mm', 'Keep-outs', 'Cable run below the tablet bottom edge'),
-    ('cable_pocket_corner_radius', '2 mm', 'Keep-outs', 'Nominal internal cable-pocket radius'),
     ('cable_pocket_center_y', '-device_height / 2 - cable_pocket_run_depth / 2', 'Keep-outs', 'Open-bottom cable-run centre'),
     ('camera_keepout_edge_x', '15.5 mm', 'Keep-outs', 'Camera centre from tablet left edge'),
     ('camera_keepout_edge_y', '196 mm', 'Keep-outs', 'Camera centre from tablet bottom edge'),
@@ -366,95 +365,6 @@ def _centered_rectangle_profile(
     return sketch.profiles.item(sketch.profiles.count - 1)
 
 
-def _centered_rounded_rectangle_profile(
-    sketch, design, width_name, height_name, center_x, center_y, radius_name
-):
-    """Create a deterministic rounded clearance profile with positive sweeps."""
-    width = _mm(design, width_name)
-    height = _mm(design, height_name)
-    cx = _mm(design, center_x)
-    cy = _mm(design, center_y)
-    radius = _mm(design, radius_name)
-    if radius <= 0 or 2 * radius >= min(width, height):
-        raise RuntimeError('Rounded profile radius must be positive and smaller than half each side.')
-    left, right = cx - width / 2, cx + width / 2
-    bottom, top = cy - height / 2, cy + height / 2
-    arcs = sketch.sketchCurves.sketchArcs
-    quarter_turn = 3.141592653589793 / 2
-    # Create arcs first. Positive sweeps preserve these controlled endpoint
-    # semantics in native Fusion: right->top, top->left, left->bottom,
-    # bottom->right. Lines then reuse the returned SketchPoint objects.
-    top_right = arcs.addByCenterStartSweep(
-        adsk.core.Point3D.create(right - radius, top - radius, 0),
-        adsk.core.Point3D.create(right, top - radius, 0), quarter_turn)
-    top_left = arcs.addByCenterStartSweep(
-        adsk.core.Point3D.create(left + radius, top - radius, 0),
-        adsk.core.Point3D.create(left + radius, top, 0), quarter_turn)
-    bottom_left = arcs.addByCenterStartSweep(
-        adsk.core.Point3D.create(left + radius, bottom + radius, 0),
-        adsk.core.Point3D.create(left, bottom + radius, 0), quarter_turn)
-    bottom_right = arcs.addByCenterStartSweep(
-        adsk.core.Point3D.create(right - radius, bottom + radius, 0),
-        adsk.core.Point3D.create(right - radius, bottom, 0), quarter_turn)
-    corner_arcs = (top_right, top_left, bottom_left, bottom_right)
-
-    lines = sketch.sketchCurves.sketchLines
-    top_line = lines.addByTwoPoints(
-        top_left.startSketchPoint, top_right.endSketchPoint)
-    right_line = lines.addByTwoPoints(
-        bottom_right.endSketchPoint, top_right.startSketchPoint)
-    bottom_line = lines.addByTwoPoints(
-        bottom_left.endSketchPoint, bottom_right.startSketchPoint)
-    left_line = lines.addByTwoPoints(
-        bottom_left.startSketchPoint, top_left.endSketchPoint)
-
-    constraints = sketch.geometricConstraints
-    constraints.addHorizontal(top_line)
-    constraints.addHorizontal(bottom_line)
-    constraints.addVertical(left_line)
-    constraints.addVertical(right_line)
-    for line, arc in (
-        (top_line, top_left), (top_line, top_right),
-        (right_line, bottom_right), (right_line, top_right),
-        (bottom_line, bottom_left), (bottom_line, bottom_right),
-        (left_line, bottom_left), (left_line, top_left),
-    ):
-        constraints.addTangent(line, arc)
-
-    dimensions = sketch.sketchDimensions
-    horizontal = adsk.fusion.DimensionOrientations.HorizontalDimensionOrientation
-    vertical = adsk.fusion.DimensionOrientations.VerticalDimensionOrientation
-    width_dimension = dimensions.addDistanceDimension(
-        top_left.endSketchPoint, top_right.startSketchPoint, horizontal,
-        adsk.core.Point3D.create(cx, top + radius, 0))
-    _set_dimension_expression(width_dimension, width_name)
-    height_dimension = dimensions.addDistanceDimension(
-        bottom_left.endSketchPoint, top_left.startSketchPoint, vertical,
-        adsk.core.Point3D.create(left - radius, cy, 0))
-    _set_dimension_expression(height_dimension, height_name)
-
-    # Distance dimensions are unsigned. Initial left/bottom quadrants preserve
-    # direction while abs() supplies valid edge-derived placement expressions.
-    x_dimension = dimensions.addDistanceDimension(
-        sketch.originPoint, bottom_left.startSketchPoint, horizontal,
-        adsk.core.Point3D.create(left / 2, bottom, 0))
-    y_dimension = dimensions.addDistanceDimension(
-        sketch.originPoint, bottom_left.endSketchPoint, vertical,
-        adsk.core.Point3D.create(left, bottom / 2, 0))
-    _set_dimension_expression(
-        x_dimension, f'abs(({center_x}) - ({width_name}) / 2)')
-    _set_dimension_expression(
-        y_dimension, f'abs(({center_y}) - ({height_name}) / 2)')
-
-    for arc in corner_arcs:
-        radial = dimensions.addRadialDimension(
-            arc, adsk.core.Point3D.create(cx, cy, 0))
-        _set_dimension_expression(radial, radius_name)
-    if sketch.profiles.count != 1:
-        raise RuntimeError('Rounded cable profile must resolve to exactly one closed profile.')
-    return sketch.profiles.item(0)
-
-
 def _validate_iteration_2_geometry(design):
     device_thickness = _mm(design, 'device_thickness')
     screen_recess = _mm(design, 'screen_recess')
@@ -646,145 +556,85 @@ def _build_tablet_envelope(design, root):
     return component
 
 
-def _build_cable_envelope(design, root):
-    """Build the controlled 18 x 8 x 20 mm open-air clearance reference."""
-    component = _new_component(root, 'CableEnvelope')
-    component.description = (
-        'NON-PRINTABLE controlled USB-C clearance. The run outside the Dock '
-        'outline is intentional open-air cable clearance, not pocket material.')
-    sketch = component.sketches.add(component.xYConstructionPlane)
-    sketch.name = 'Controlled rounded cable clear-volume footprint'
-    extrusion = _extrude(
-        component,
-        _centered_rounded_rectangle_profile(
-            sketch, design, 'cable_pocket_width', 'cable_pocket_run_depth',
-            'cable_pocket_center_x', 'cable_pocket_center_y',
-            'cable_pocket_corner_radius'),
-        'cable_pocket_height')
-    if extrusion.bodies.count != 1 or component.bRepBodies.count != 1:
-        raise RuntimeError(
-            'CableEnvelope extrusion must create exactly one reference body.')
-    body = extrusion.bodies.item(0)
-    if not body or not body.isValid or not body.isSolid or body.volume <= 0:
-        raise RuntimeError(
-            'CableEnvelope extrusion did not immediately create a valid, solid, '
-            'positive-volume reference body.')
-    body.name = 'CableEnvelope - REFERENCE ONLY - NEVER EXPORT'
-    return component
-
-
 def _cut_cable_profile(component, design, plane, center_y, distance, name):
-    """Cut the same controlled rounded cable footprint from printable geometry."""
+    """Cut the conservative controlled rectangular cable clearance."""
     sketch = component.sketches.add(plane)
-    sketch.name = name + ' rounded footprint'
+    sketch.name = name + ' rectangular footprint'
     cut = _extrude(
         component,
-        _centered_rounded_rectangle_profile(
+        _centered_rectangle_profile(
             sketch, design, 'cable_pocket_width', 'cable_pocket_run_depth',
-            'cable_pocket_center_x', center_y, 'cable_pocket_corner_radius'),
+            'cable_pocket_center_x', center_y),
         distance, adsk.fusion.FeatureOperations.CutFeatureOperation)
-    cut.name = name + ' - controlled 2 mm internal radius'
+    cut.name = name + ' - conservative rectangular clearance'
     return cut
 
 
-def _validate_cable_envelope_clear(design, cable_envelope, printable_components):
-    """Use native BRep intersections to block export if any cable clash remains."""
-    compute_result = design.computeAll()
-    body_count = cable_envelope.bRepBodies.count
-    body_name = 'CableEnvelope - REFERENCE ONLY - NEVER EXPORT'
-    # This lookup happens only after computeAll. Never retain or reuse a body
-    # reference acquired before native recomputation.
-    envelope_body = cable_envelope.bRepBodies.itemByName(body_name)
+def _validate_timeline_health(design):
+    """Block export for every unhealthy sketch or feature after recomputation."""
+    unhealthy = []
+    components = [design.rootComponent]
+    for index in range(design.rootComponent.allOccurrences.count):
+        component = design.rootComponent.allOccurrences.item(index).component
+        if component not in components:
+            components.append(component)
+    error_state = adsk.fusion.FeatureHealthStates.ErrorFeatureHealthState
+    warning_state = adsk.fusion.FeatureHealthStates.WarningFeatureHealthState
+    for component in components:
+        for collection in (component.sketches, component.features):
+            for index in range(collection.count):
+                entity = collection.item(index)
+                if entity.healthState in (error_state, warning_state):
+                    unhealthy.append(
+                        '{} / {}: healthState={} — {}'.format(
+                            component.name, entity.name, entity.healthState,
+                            entity.errorOrWarningMessage))
+    if unhealthy:
+        raise RuntimeError(
+            'Export blocked by unhealthy Fusion timeline entities:\n' +
+            '\n'.join(unhealthy))
 
+
+def _create_temporary_cable_envelope(design):
+    """Create and validate a non-timeline rectangular interference body."""
     width = _mm(design, 'cable_pocket_width')
     run_depth = _mm(design, 'cable_pocket_run_depth')
     height = _mm(design, 'cable_pocket_height')
     center_x = _mm(design, 'cable_pocket_center_x')
     center_y = _mm(design, 'cable_pocket_center_y')
+    center = adsk.core.Point3D.create(center_x, center_y, height / 2)
+    length_direction = adsk.core.Vector3D.create(1, 0, 0)
+    width_direction = adsk.core.Vector3D.create(0, 1, 0)
+    oriented_box = adsk.core.OrientedBoundingBox3D.create(
+        center, length_direction, width_direction, width, run_depth, height)
+    manager = adsk.fusion.TemporaryBRepManager.get()
+    body = manager.createBox(oriented_box)
     expected_min = (center_x - width / 2, center_y - run_depth / 2, 0.0)
     expected_max = (center_x + width / 2, center_y + run_depth / 2, height)
-
-    approximate_bounds = envelope_body.boundingBox if envelope_body else None
-    precise_bounds = envelope_body.preciseBoundingBox if envelope_body else None
-    component_bounds = cable_envelope.preciseBoundingBox
-
-    def _box_diagnostic(box):
-        if not box:
-            return 'unavailable'
-        return ('min=({:.3f}, {:.3f}, {:.3f}) mm; max=({:.3f}, {:.3f}, '
-                '{:.3f}) mm').format(
-                    box.minPoint.x * 10, box.minPoint.y * 10,
-                    box.minPoint.z * 10, box.maxPoint.x * 10,
-                    box.maxPoint.y * 10, box.maxPoint.z * 10)
-
-    def _diagnostics(reason):
-        named_lookup = envelope_body.name if envelope_body else 'MISSING'
-        is_valid = envelope_body.isValid if envelope_body else False
-        is_solid = envelope_body.isSolid if envelope_body else False
-        volume = envelope_body.volume * 1000 if envelope_body else 0.0
-        faces = envelope_body.faces.count if envelope_body else 0
-        edges = envelope_body.edges.count if envelope_body else 0
-        vertices = envelope_body.vertices.count if envelope_body else 0
-        revision = envelope_body.revisionId if envelope_body else 'MISSING'
-        return (
-            reason + '\nCableEnvelope native diagnostics:'
-            '\n  computeAll result: ' + str(compute_result) +
-            '\n  component body count: ' + str(body_count) +
-            '\n  named-body lookup result: ' + named_lookup +
-            '\n  body.isValid: ' + str(is_valid) +
-            '\n  body.isSolid: ' + str(is_solid) +
-            '\n  body.volume (mm^3): {:.6f}'.format(volume) +
-            '\n  face/edge/vertex counts: {}/{}/{}'.format(
-                faces, edges, vertices) +
-            '\n  body revisionId: ' + str(revision) +
-            '\n  approximate boundingBox: ' +
-            _box_diagnostic(approximate_bounds) +
-            '\n  preciseBoundingBox: ' + _box_diagnostic(precise_bounds) +
-            '\n  component preciseBoundingBox: ' +
-            _box_diagnostic(component_bounds) +
-            '\n  expected min=({:.3f}, {:.3f}, {:.3f}) mm; '
-            'max=({:.3f}, {:.3f}, {:.3f}) mm'.format(
-                expected_min[0] * 10, expected_min[1] * 10,
-                expected_min[2] * 10, expected_max[0] * 10,
-                expected_max[1] * 10, expected_max[2] * 10))
-
-    if not compute_result:
-        raise RuntimeError(_diagnostics(
-            'CableEnvelope validation blocked because design.computeAll() failed.'))
-    if body_count != 1 or not envelope_body:
-        raise RuntimeError(_diagnostics(
-            'CableEnvelope must contain exactly one controlled named body.'))
-    if (not envelope_body.isValid or not envelope_body.isSolid or
-            envelope_body.volume <= 0 or envelope_body.faces.count <= 0 or
-            envelope_body.edges.count <= 0 or envelope_body.vertices.count <= 0):
-        raise RuntimeError(_diagnostics(
-            'CableEnvelope BRep is invalid, empty, non-solid, or lacks topology.'))
-
+    if (not body or not body.isTemporary or not body.isValid or
+            not body.isSolid or body.volume <= 0):
+        raise RuntimeError(
+            'Temporary cable envelope must be a valid, solid, positive-volume '
+            'TemporaryBRep body.')
+    bounds = body.preciseBoundingBox
+    actual = (
+        bounds.minPoint.x, bounds.minPoint.y, bounds.minPoint.z,
+        bounds.maxPoint.x, bounds.maxPoint.y, bounds.maxPoint.z)
+    expected = expected_min + expected_max
     tolerance = 0.01  # Fusion internal centimetres: 0.1 mm; do not increase.
-    actual_min = (
-        precise_bounds.minPoint.x, precise_bounds.minPoint.y,
-        precise_bounds.minPoint.z)
-    actual_max = (
-        precise_bounds.maxPoint.x, precise_bounds.maxPoint.y,
-        precise_bounds.maxPoint.z)
-    component_min = (
-        component_bounds.minPoint.x, component_bounds.minPoint.y,
-        component_bounds.minPoint.z)
-    component_max = (
-        component_bounds.maxPoint.x, component_bounds.maxPoint.y,
-        component_bounds.maxPoint.z)
-    coordinates = zip(
-        actual_min + actual_max, expected_min + expected_max)
-    if any(abs(actual - expected) > tolerance for actual, expected in coordinates):
-        raise RuntimeError(_diagnostics(
-            'CableEnvelope is valid but has incorrect world-space geometry or location.'))
-    body_component_coordinates = zip(
-        actual_min + actual_max, component_min + component_max)
-    if any(abs(body - component) > tolerance
-           for body, component in body_component_coordinates):
-        raise RuntimeError(_diagnostics(
-            'CableEnvelope body and component precise bounding boxes disagree.'))
+    if any(abs(value - target) > tolerance
+           for value, target in zip(actual, expected)):
+        raise RuntimeError(
+            'Temporary cable envelope has incorrect world-space bounds. '
+            'Expected min/max (mm): {}; actual min/max (mm): {}.'.format(
+                tuple(value * 10 for value in expected),
+                tuple(value * 10 for value in actual)))
+    return body
 
+
+def _validate_cable_clearance(design, printable_components):
+    """Intersect printable body copies with a validated temporary envelope."""
+    envelope_body = _create_temporary_cable_envelope(design)
     manager = adsk.fusion.TemporaryBRepManager.get()
     for component in printable_components:
         for index in range(component.bRepBodies.count):
@@ -794,9 +644,10 @@ def _validate_cable_envelope_clear(design, cable_envelope, printable_components)
                 intersection, printable,
                 adsk.fusion.BooleanTypes.IntersectionBooleanType)
             if intersects and intersection.physicalProperties.volume > 1e-9:
-                raise RuntimeError(_diagnostics(
-                    'CableEnvelope intersects ' + component.name +
-                    ' after controlled cuts; printable export is blocked.'))
+                raise RuntimeError(
+                    'Temporary cable envelope intersects ' + component.name +
+                    ' after controlled cuts; printable export is blocked.')
+    envelope_body = None  # Drop the only temporary reference before export.
 
 
 def _ring_profile(sketch):
@@ -1201,7 +1052,7 @@ def _validate_open_corner_coupon(component, design):
 
 def _build_guide_shelf_coupon(design, root):
     component = _new_component(root, 'Coupon_Side_Guide_Lower_Shelf')
-    component.description = 'Full-width guide coupon with the real rounded cable pocket and single speaker slot.'
+    component.description = 'Full-width guide coupon with the conservative rectangular cable pocket and single speaker slot.'
     shelf_sketch = component.sketches.add(component.xYConstructionPlane)
     shelf = _extrude(component, _centered_rectangle_profile(
         shelf_sketch, design, 'coupon_shelf_width', 'lower_support_thickness',
@@ -1231,7 +1082,7 @@ def _build_faceplate_cable_coupon(design, root):
     """Build one connected bottom-centre Faceplate/cable fit article."""
     component = _new_component(root, 'Coupon_Faceplate_USB_C_Cable_Pocket')
     component.description = (
-        'Real Faceplate lip/skirt depths and controlled rounded cable cut; '
+        'Real Faceplate lip/skirt depths and controlled rectangular cable cut; '
         'verify tablet insertion, connector housing, bend freedom, and no skirt contact.')
     lip_plane = _offset_plane(component, 'pocket_depth', 'Cable coupon lip rear datum')
     lip_sketch = component.sketches.add(lip_plane)
@@ -1368,7 +1219,7 @@ def _validate_full_size_release(design):
         )
 
 
-def _export_outputs(design, coupons, faceplate, dock_body, cable_envelope):
+def _export_outputs(design, coupons, faceplate, dock_body):
     if EXPORT_MODE not in (COUPONS_ONLY, FULL_SIZE_PRINT_CANDIDATE):
         raise RuntimeError('Unknown EXPORT_MODE: ' + str(EXPORT_MODE))
     root_dir = os.path.join(os.path.expanduser('~'), 'Documents', 'HALO_Dock_Rev_A')
@@ -1376,8 +1227,10 @@ def _export_outputs(design, coupons, faceplate, dock_body, cable_envelope):
         root_dir, 'coupons' if EXPORT_MODE == COUPONS_ONLY else 'print-candidate')
     os.makedirs(output_dir, exist_ok=True)
     export_manager = design.exportManager
-    _validate_cable_envelope_clear(
-        design, cable_envelope, (faceplate, dock_body))
+    if not design.computeAll():
+        raise RuntimeError('Export blocked because design.computeAll() returned False.')
+    _validate_timeline_health(design)
+    _validate_cable_clearance(design, (faceplate, dock_body))
     if EXPORT_MODE == COUPONS_ONLY:
         # Each tuple is one printable component and one controlled Part ID.
         # Full parts and root/reference geometry are absent from this list.
@@ -1413,7 +1266,6 @@ def run(context):
         _set_parameters(design)
         _validate_iteration_2_geometry(design)
         _build_tablet_envelope(design, root)
-        cable_envelope = _build_cable_envelope(design, root)
         faceplate = _build_faceplate(design, root)
         dock_body = _build_dock_body(design, root)
         if _dual_lock_measurement(design, required=False):
@@ -1446,8 +1298,7 @@ def run(context):
                     design, root, 'Left', 'wall_coupon_center_x_left'),
                  COUPON_PART_IDS['wall_left']),
             ))
-        output_dir = _export_outputs(
-            design, coupons, faceplate, dock_body, cable_envelope)
+        output_dir = _export_outputs(design, coupons, faceplate, dock_body)
         if UI:
             message = 'HALO Dock Rev A generated in ' + EXPORT_MODE + ' mode and exported to:\n' + output_dir
             if not _dual_lock_measurement(design, required=False):

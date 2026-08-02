@@ -178,90 +178,49 @@ class Sprint3StaticGuards(unittest.TestCase):
         for prohibited in ('jack_opening', 'microsd', 'microphone_opening'):
             self.assertNotIn(prohibited, SOURCE.lower())
 
-    def test_cable_radius_is_real_positive_sweep_geometry(self):
-        rounded = ast.unparse(function('_centered_rounded_rectangle_profile'))
-        self.assertIn("_mm(design, radius_name)", rounded)
-        self.assertIn('addByCenterStartSweep', rounded)
-        self.assertIn('_set_dimension_expression(radial, radius_name)', rounded)
-        self.assertNotIn('-quarter_turn', rounded)
+    def test_cable_cuts_use_proven_rectangular_profile(self):
         cutter = ast.unparse(function('_cut_cable_profile'))
-        self.assertIn("'cable_pocket_corner_radius'", cutter)
-        self.assertIn('_centered_rounded_rectangle_profile', cutter)
+        self.assertIn('_centered_rectangle_profile', cutter)
+        self.assertNotIn('_centered_rounded_rectangle_profile', SOURCE)
+        self.assertNotIn('cable_pocket_corner_radius', SOURCE)
+        for builder in ('_build_faceplate', '_build_dock_body',
+                        '_build_guide_shelf_coupon',
+                        '_build_faceplate_cable_coupon'):
+            self.assertIn('_cut_cable_profile', ast.unparse(function(builder)))
 
-    def test_rounded_cable_profile_is_fully_constrained_and_placed(self):
-        rounded = ast.unparse(function('_centered_rounded_rectangle_profile'))
-        self.assertIn('_set_dimension_expression(width_dimension, width_name)', rounded)
-        self.assertIn('_set_dimension_expression(height_dimension, height_name)', rounded)
-        self.assertIn("f'abs(({center_x}) - ({width_name}) / 2)'", rounded)
-        self.assertIn("f'abs(({center_y}) - ({height_name}) / 2)'", rounded)
-        self.assertEqual(rounded.count('constraints.addHorizontal'), 2)
-        self.assertEqual(rounded.count('constraints.addVertical'), 2)
-        self.assertIn('constraints.addTangent(line, arc)', rounded)
-        self.assertIn('quarter_turn = 3.141592653589793 / 2', rounded)
-        self.assertNotIn('-quarter_turn', rounded)
-        self.assertIn('sketch.profiles.count != 1', rounded)
-        for endpoints in (
-            'top_left.startSketchPoint, top_right.endSketchPoint',
-            'bottom_right.endSketchPoint, top_right.startSketchPoint',
-            'bottom_left.endSketchPoint, bottom_right.startSketchPoint',
-            'bottom_left.startSketchPoint, top_left.endSketchPoint',
-        ):
-            self.assertIn(endpoints, rounded)
+    def test_cable_envelope_is_temporary_and_parameter_derived(self):
+        temporary = ast.unparse(function('_create_temporary_cable_envelope'))
+        self.assertIn('OrientedBoundingBox3D.create', temporary)
+        self.assertIn('TemporaryBRepManager.get()', temporary)
+        self.assertIn('manager.createBox(oriented_box)', temporary)
+        self.assertIn('body.isTemporary', temporary)
+        self.assertIn('body.preciseBoundingBox', temporary)
+        self.assertIn('expected_min =', temporary)
+        self.assertIn('expected_max =', temporary)
+        self.assertIn("_mm(design, 'cable_pocket_center_x')", temporary)
+        self.assertIn("_mm(design, 'cable_pocket_center_y')", temporary)
+        self.assertNotIn("_new_component(root, 'CableEnvelope')", SOURCE)
+        self.assertNotIn('def _build_cable_envelope', SOURCE)
 
-    def test_cable_envelope_failure_reports_world_axis_diagnostics(self):
-        guard = ast.unparse(function('_validate_cable_envelope_clear'))
-        self.assertIn("_mm(design, 'cable_pocket_width')", guard)
-        self.assertIn("_mm(design, 'cable_pocket_run_depth')", guard)
-        self.assertIn("_mm(design, 'cable_pocket_height')", guard)
-        self.assertIn('tolerance = 0.01', guard)
-        for diagnostic in (
-            'computeAll result', 'component body count',
-            'named-body lookup result', 'body.isValid', 'body.isSolid',
-            'body.volume (mm^3)', 'face/edge/vertex counts',
-            'body revisionId', 'approximate boundingBox',
-            'preciseBoundingBox', 'component preciseBoundingBox',
-            'expected min=',
-        ):
-            self.assertIn(diagnostic, guard)
-
-    def test_cable_envelope_recomputes_reacquires_and_validates_solid(self):
-        guard = ast.unparse(function('_validate_cable_envelope_clear'))
-        compute_index = guard.index('design.computeAll()')
-        lookup_index = guard.index('itemByName(body_name)')
-        self.assertLess(compute_index, lookup_index)
-        self.assertIn("body_name = 'CableEnvelope - REFERENCE ONLY - NEVER EXPORT'", guard)
-        self.assertIn('body_count != 1', guard)
-        self.assertIn('not envelope_body.isValid', guard)
-        self.assertIn('not envelope_body.isSolid', guard)
-        self.assertIn('envelope_body.volume <= 0', guard)
-        self.assertIn('envelope_body.faces.count <= 0', guard)
-        self.assertIn('envelope_body.edges.count <= 0', guard)
-        self.assertIn('envelope_body.vertices.count <= 0', guard)
-        self.assertIn('envelope_body.preciseBoundingBox', guard)
-        self.assertIn('cable_envelope.preciseBoundingBox', guard)
-        self.assertIn('expected_min =', guard)
-        self.assertIn('expected_max =', guard)
-        self.assertIn('actual_min + actual_max, expected_min + expected_max', guard)
-
-    def test_cable_envelope_construction_has_immediate_solid_guard(self):
-        envelope = ast.unparse(function('_build_cable_envelope'))
-        self.assertIn('extrusion.bodies.count != 1', envelope)
-        self.assertIn('component.bRepBodies.count != 1', envelope)
-        self.assertIn('not body.isValid', envelope)
-        self.assertIn('not body.isSolid', envelope)
-        self.assertIn('body.volume <= 0', envelope)
-
-    def test_cable_envelope_is_reference_only_and_export_guarded(self):
-        envelope = ast.unparse(function('_build_cable_envelope'))
-        self.assertIn("_new_component(root, 'CableEnvelope')", envelope)
-        self.assertIn('NON-PRINTABLE', envelope)
-        self.assertIn('intentional open-air cable clearance', envelope)
-        self.assertIn("'cable_pocket_width'", envelope)
-        self.assertIn("'cable_pocket_run_depth'", envelope)
-        self.assertIn("'cable_pocket_height'", envelope)
+    def test_timeline_health_blocks_errors_and_warnings(self):
+        health = ast.unparse(function('_validate_timeline_health'))
+        self.assertIn('ErrorFeatureHealthState', health)
+        self.assertIn('WarningFeatureHealthState', health)
+        self.assertIn('entity.errorOrWarningMessage', health)
+        self.assertIn('component.name', health)
+        self.assertIn('entity.name', health)
         export = ast.unparse(function('_export_outputs'))
-        self.assertIn('_validate_cable_envelope_clear', export)
-        self.assertNotIn('_export_printable_part(export_manager, cable_envelope', export)
+        self.assertIn('design.computeAll()', export)
+        self.assertIn('_validate_timeline_health(design)', export)
+        self.assertIn('_validate_cable_clearance', export)
+
+    def test_temporary_reference_cannot_enter_export_lists(self):
+        export = ast.unparse(function('_export_outputs'))
+        run = ast.unparse(function('run'))
+        self.assertNotIn('cable_envelope', export)
+        self.assertNotIn('CableEnvelope', run)
+        self.assertNotIn('_create_temporary_cable_envelope', run)
+        self.assertNotIn('_export_printable_part(export_manager, envelope_body', SOURCE)
 
     def test_every_intersecting_printable_and_coupons_receive_cable_cut(self):
         faceplate = ast.unparse(function('_build_faceplate'))
