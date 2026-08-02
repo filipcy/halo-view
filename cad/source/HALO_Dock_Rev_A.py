@@ -223,8 +223,10 @@ def _rounded_rectangle(
 
     constraints = sketch.geometricConstraints
     if concentric_with is not None:
-        for outer_arc, inner_arc in zip(concentric_with.arcs, arc_entities):
-            constraints.addConcentric(outer_arc, inner_arc)
+        # One shared corner centre anchors the entire inner loop. Its driven
+        # width, height, and radius dimensions determine the other corners;
+        # constraining all four corresponding arcs over-constrains that system.
+        constraints.addConcentric(concentric_with.arcs[0], arc_entities[0])
 
     dimensions = sketch.sketchDimensions
     horizontal = adsk.fusion.DimensionOrientations.HorizontalDimensionOrientation
@@ -255,8 +257,8 @@ def _rounded_rectangle(
         _set_dimension_expression(dimension, radius_expression)
 
     # Only a standalone/outer loop is anchored. A nested loop instead inherits
-    # its deterministic location from the explicit corresponding concentric
-    # constraints above; duplicating these dimensions over-constrains Fusion.
+    # its deterministic location from the explicit upper-right concentric
+    # constraint above; duplicating these dimensions over-constrains Fusion.
     if concentric_with is None:
         corner_center = arc_entities[0].centerSketchPoint
         x_dimension = dimensions.addDistanceDimension(

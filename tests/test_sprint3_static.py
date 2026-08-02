@@ -22,11 +22,13 @@ def function(name):
 
 
 class Sprint3StaticGuards(unittest.TestCase):
-    def test_nested_rounded_rectangles_are_explicitly_concentric(self):
+    def test_nested_rounded_rectangle_has_one_upper_right_concentric_anchor(self):
         rounded = ast.unparse(function('_rounded_rectangle'))
         self.assertIn('concentric_with=None', rounded)
-        self.assertIn('constraints.addConcentric(outer_arc, inner_arc)', rounded)
-        self.assertIn('zip(concentric_with.arcs, arc_entities)', rounded)
+        anchor = 'constraints.addConcentric(concentric_with.arcs[0], arc_entities[0])'
+        self.assertIn(anchor, rounded)
+        self.assertEqual(rounded.count('addConcentric('), 1)
+        self.assertNotIn('zip(concentric_with.arcs, arc_entities)', rounded)
 
     def test_only_outer_or_standalone_rectangle_has_origin_anchors(self):
         rounded_node = function('_rounded_rectangle')
