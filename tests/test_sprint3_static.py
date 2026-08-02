@@ -105,6 +105,8 @@ class Sprint3StaticGuards(unittest.TestCase):
         self.assertIn('outer_top.endSketchPoint', profile)
         self.assertIn('inner_side.endSketchPoint', profile)
         self.assertNotIn('constraints.addCoincident', profile)
+        self.assertNotIn('addVertical(outer_side)', profile)
+        self.assertNotIn('addVertical(inner_side)', profile)
         self.assertNotIn('coupon_corner_outer_width', profile)
         self.assertNotIn('coupon_corner_outer_height', profile)
 

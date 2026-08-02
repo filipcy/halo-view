@@ -737,8 +737,6 @@ def _open_corner_l_profile(sketch, design, band_expression):
     constraints.addHorizontal(outer_top)
     constraints.addHorizontal(side_end)
     constraints.addHorizontal(inner_top)
-    constraints.addVertical(outer_side)
-    constraints.addVertical(inner_side)
     constraints.addVertical(top_end)
 
     dims = sketch.sketchDimensions
