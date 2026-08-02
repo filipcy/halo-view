@@ -22,6 +22,44 @@ def function(name):
 
 
 class Sprint3StaticGuards(unittest.TestCase):
+    def test_every_rounded_rectangle_is_independently_origin_centred(self):
+        rounded = ast.unparse(function('_rounded_rectangle'))
+        self.assertNotIn('concentric_with', rounded)
+        self.assertNotIn('addConcentric', rounded)
+        self.assertIn('center_diagonal.isConstruction = True', rounded)
+        self.assertIn(
+            'addMidPoint(sketch.originPoint, center_diagonal)', rounded
+        )
+
+    def test_width_height_and_radius_remain_parameter_driven(self):
+        rounded = ast.unparse(function('_rounded_rectangle'))
+        self.assertIn("f'{width_expression} - 2 * ({radius_expression})'", rounded)
+        self.assertIn("f'{height_expression} - 2 * ({radius_expression})'", rounded)
+        self.assertIn('_set_dimension_expression(dimension, radius_expression)', rounded)
+
+    def test_both_faceplate_nested_profiles_use_generic_safe_api(self):
+        faceplate = ast.unparse(function('_build_faceplate'))
+        self.assertEqual(faceplate.count('_rounded_rectangle('), 4)
+        self.assertNotIn('concentric_with', faceplate)
+
+    def test_rear_skirt_supports_unequal_clearances_without_recentering(self):
+        faceplate = ast.unparse(function('_build_faceplate'))
+        self.assertIn("'device_width + 2 * pocket_clearance_x'", faceplate)
+        self.assertIn("'device_height + 2 * pocket_clearance_y'", faceplate)
+        self.assertIn("'device_corner_radius + pocket_clearance_x'", faceplate)
+        self.assertNotIn('addConcentric', faceplate)
+
+    def test_part_design_component_failure_explains_hybrid_design(self):
+        new_component = ast.unparse(function('_new_component'))
+        self.assertIn('Part Design documents can only contain one component', new_component)
+        self.assertIn('requires a Hybrid Design document', new_component)
+        self.assertIn('Open or convert to Hybrid Design', new_component)
+
+    def test_ring_profile_requires_exactly_one_closed_two_loop_region(self):
+        ring = ast.unparse(function('_ring_profile'))
+        self.assertIn('profile.profileLoops.count == 2', ring)
+        self.assertIn('len(ring_profiles) != 1', ring)
+
     def test_export_modes_and_safe_default(self):
         self.assertEqual(assignment('COUPONS_ONLY'), 'COUPONS_ONLY')
         self.assertEqual(assignment('FULL_SIZE_PRINT_CANDIDATE'), 'FULL_SIZE_PRINT_CANDIDATE')

@@ -2,6 +2,12 @@
 
 `HALO_Dock_Rev_A.py` is the native Fusion 360 parametric source generator. Sprint 3 retains accepted Iteration 2 full-part geometry and adds test coupons, measured Dual Lock recess logic, and gated exports. Static Python checks are not native CAD validation.
 
+## Native validation setup and rerun safety
+
+Every validation run must start in a **fresh, empty Hybrid Design** document. The generator creates multiple internal components, which Fusion does not permit in a Part Design document. If Fusion reports that Part Design documents can contain only one component, open or convert the document to Hybrid Design and begin again in a fresh empty document.
+
+A failed run can leave partial generated components behind. The generator is not transactional and deliberately does not delete existing components, because they may be unrelated user work. Do not rerun it in the document left by a failed validation; discard that document and repeat the validation in another fresh empty Hybrid Design.
+
 ## Export modes
 
 `EXPORT_MODE` defaults to `COUPONS_ONLY` and writes controlled STEP + STL pairs for coupon parts to `~/Documents/HALO_Dock_Rev_A/coupons/`. It never exports full Faceplate/DockBody meshes or assembly F3D/STEP/PNG. The 0.2/0.3/0.4 mm clearance gauges, open L corner/lip coupon, and full-pocket-width guide/shelf coupon are included. The separately named left and right single-field wall articles are included only after a valid physical Dual Lock measurement; no STL contains loose wall-coupon bodies.
