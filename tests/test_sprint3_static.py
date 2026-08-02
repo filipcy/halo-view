@@ -22,34 +22,32 @@ def function(name):
 
 
 class Sprint3StaticGuards(unittest.TestCase):
-    def test_nested_rounded_rectangle_has_one_upper_right_concentric_anchor(self):
+    def test_every_rounded_rectangle_is_independently_origin_centred(self):
         rounded = ast.unparse(function('_rounded_rectangle'))
-        self.assertIn('concentric_with=None', rounded)
-        anchor = 'constraints.addConcentric(concentric_with.arcs[0], arc_entities[0])'
-        self.assertIn(anchor, rounded)
-        self.assertEqual(rounded.count('addConcentric('), 1)
-        self.assertNotIn('zip(concentric_with.arcs, arc_entities)', rounded)
-
-    def test_only_outer_or_standalone_rectangle_has_origin_anchors(self):
-        rounded_node = function('_rounded_rectangle')
-        anchor_if = next(
-            node for node in ast.walk(rounded_node)
-            if isinstance(node, ast.If)
-            and ast.unparse(node.test) == 'concentric_with is None'
-            and 'sketch.originPoint' in ast.unparse(node)
+        self.assertNotIn('concentric_with', rounded)
+        self.assertNotIn('addConcentric', rounded)
+        self.assertIn('center_diagonal.isConstruction = True', rounded)
+        self.assertIn(
+            'addMidPoint(sketch.originPoint, center_diagonal)', rounded
         )
-        self.assertEqual(ast.unparse(anchor_if).count('sketch.originPoint'), 2)
-        self.assertNotIn('sketch.originPoint', '\n'.join(
-            ast.unparse(node) for node in anchor_if.orelse
-        ))
 
-    def test_both_faceplate_inner_loops_use_outer_geometry(self):
+    def test_width_height_and_radius_remain_parameter_driven(self):
+        rounded = ast.unparse(function('_rounded_rectangle'))
+        self.assertIn("f'{width_expression} - 2 * ({radius_expression})'", rounded)
+        self.assertIn("f'{height_expression} - 2 * ({radius_expression})'", rounded)
+        self.assertIn('_set_dimension_expression(dimension, radius_expression)', rounded)
+
+    def test_both_faceplate_nested_profiles_use_generic_safe_api(self):
         faceplate = ast.unparse(function('_build_faceplate'))
-        self.assertIn('lip_outer = _rounded_rectangle', faceplate)
-        self.assertIn('concentric_with=lip_outer', faceplate)
-        self.assertIn('skirt_outer = _rounded_rectangle', faceplate)
-        self.assertIn('concentric_with=skirt_outer', faceplate)
-        self.assertEqual(faceplate.count('concentric_with='), 2)
+        self.assertEqual(faceplate.count('_rounded_rectangle('), 4)
+        self.assertNotIn('concentric_with', faceplate)
+
+    def test_rear_skirt_supports_unequal_clearances_without_recentering(self):
+        faceplate = ast.unparse(function('_build_faceplate'))
+        self.assertIn("'device_width + 2 * pocket_clearance_x'", faceplate)
+        self.assertIn("'device_height + 2 * pocket_clearance_y'", faceplate)
+        self.assertIn("'device_corner_radius + pocket_clearance_x'", faceplate)
+        self.assertNotIn('addConcentric', faceplate)
 
     def test_part_design_component_failure_explains_hybrid_design(self):
         new_component = ast.unparse(function('_new_component'))

@@ -201,9 +201,8 @@ def _rounded_rectangle(
     width_expression,
     height_expression,
     radius_expression,
-    concentric_with=None,
 ):
-    """Draw a rounded rectangle, anchored or concentric with an outer one."""
+    """Draw a parameter-driven rounded rectangle centred on the origin."""
     lines = sketch.sketchCurves.sketchLines
     arcs = sketch.sketchCurves.sketchArcs
     half_w, half_h = width / 2, height / 2
@@ -221,12 +220,15 @@ def _rounded_rectangle(
         arcs.addByCenterStartSweep(adsk.core.Point3D.create(-half_w + r, half_h - r, 0), adsk.core.Point3D.create(-half_w, half_h - r, 0), -3.141592653589793 / 2),
     )
 
-    constraints = sketch.geometricConstraints
-    if concentric_with is not None:
-        # One shared corner centre anchors the entire inner loop. Its driven
-        # width, height, and radius dimensions determine the other corners;
-        # constraining all four corresponding arcs over-constrains that system.
-        constraints.addConcentric(concentric_with.arcs[0], arc_entities[0])
+    # Centre this loop independently of every other loop. The construction
+    # diagonal joins opposite arc centres, and constraining the sketch origin
+    # to its midpoint removes translation without coupling unequal X/Y insets.
+    center_diagonal = lines.addByTwoPoints(
+        arc_entities[0].centerSketchPoint,
+        arc_entities[2].centerSketchPoint,
+    )
+    center_diagonal.isConstruction = True
+    sketch.geometricConstraints.addMidPoint(sketch.originPoint, center_diagonal)
 
     dimensions = sketch.sketchDimensions
     horizontal = adsk.fusion.DimensionOrientations.HorizontalDimensionOrientation
@@ -256,29 +258,6 @@ def _rounded_rectangle(
         )
         _set_dimension_expression(dimension, radius_expression)
 
-    # Only a standalone/outer loop is anchored. A nested loop instead inherits
-    # its deterministic location from the explicit upper-right concentric
-    # constraint above; duplicating these dimensions over-constrains Fusion.
-    if concentric_with is None:
-        corner_center = arc_entities[0].centerSketchPoint
-        x_dimension = dimensions.addDistanceDimension(
-            sketch.originPoint,
-            corner_center,
-            horizontal,
-            adsk.core.Point3D.create(half_w / 2, 0, 0),
-        )
-        _set_dimension_expression(
-            x_dimension, f'({width_expression}) / 2 - ({radius_expression})'
-        )
-        y_dimension = dimensions.addDistanceDimension(
-            sketch.originPoint,
-            corner_center,
-            vertical,
-            adsk.core.Point3D.create(0, half_h / 2, 0),
-        )
-        _set_dimension_expression(
-            y_dimension, f'({height_expression}) / 2 - ({radius_expression})'
-        )
     return _RoundedRectangleGeometry(sketch, line_entities, arc_entities)
 
 
@@ -516,7 +495,7 @@ def _build_faceplate(design, root):
 
     lip_sketch = component.sketches.add(lip_rear_plane)
     lip_sketch.name = 'Faceplate visible lip and display opening'
-    lip_outer = _rounded_rectangle(
+    _rounded_rectangle(
         lip_sketch,
         device_width + (2 * bezel),
         device_height + (2 * bezel),
@@ -533,7 +512,6 @@ def _build_faceplate(design, root):
         'device_width - 2 * inner_lip_overlap',
         'device_height - 2 * inner_lip_overlap',
         'device_corner_radius - inner_lip_overlap',
-        concentric_with=lip_outer,
     )
     lip_feature = _extrude(component, _ring_profile(lip_sketch), 'screen_recess')
     lip_feature.name = 'Visible front lip - display recess'
@@ -541,7 +519,7 @@ def _build_faceplate(design, root):
 
     skirt_sketch = component.sketches.add(skirt_rear_plane)
     skirt_sketch.name = 'Faceplate rear perimeter skirt outside TabletEnvelope'
-    skirt_outer = _rounded_rectangle(
+    _rounded_rectangle(
         skirt_sketch,
         device_width + (2 * bezel),
         device_height + (2 * bezel),
@@ -558,7 +536,6 @@ def _build_faceplate(design, root):
         'device_width + 2 * pocket_clearance_x',
         'device_height + 2 * pocket_clearance_y',
         'device_corner_radius + pocket_clearance_x',
-        concentric_with=skirt_outer,
     )
     skirt_feature = _extrude(
         component,
