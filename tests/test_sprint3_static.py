@@ -213,12 +213,43 @@ class Sprint3StaticGuards(unittest.TestCase):
         self.assertIn("_mm(design, 'cable_pocket_width')", guard)
         self.assertIn("_mm(design, 'cable_pocket_run_depth')", guard)
         self.assertIn("_mm(design, 'cable_pocket_height')", guard)
-        self.assertIn('> 0.01', guard)
+        self.assertIn('tolerance = 0.01', guard)
         for diagnostic in (
-            'Expected X/Y/Z (mm)', 'actual X/Y/Z (mm)',
-            'min X/Y/Z (mm)', 'max X/Y/Z (mm)',
+            'computeAll result', 'component body count',
+            'named-body lookup result', 'body.isValid', 'body.isSolid',
+            'body.volume (mm^3)', 'face/edge/vertex counts',
+            'body revisionId', 'approximate boundingBox',
+            'preciseBoundingBox', 'component preciseBoundingBox',
+            'expected min=',
         ):
             self.assertIn(diagnostic, guard)
+
+    def test_cable_envelope_recomputes_reacquires_and_validates_solid(self):
+        guard = ast.unparse(function('_validate_cable_envelope_clear'))
+        compute_index = guard.index('design.computeAll()')
+        lookup_index = guard.index('itemByName(body_name)')
+        self.assertLess(compute_index, lookup_index)
+        self.assertIn("body_name = 'CableEnvelope - REFERENCE ONLY - NEVER EXPORT'", guard)
+        self.assertIn('body_count != 1', guard)
+        self.assertIn('not envelope_body.isValid', guard)
+        self.assertIn('not envelope_body.isSolid', guard)
+        self.assertIn('envelope_body.volume <= 0', guard)
+        self.assertIn('envelope_body.faces.count <= 0', guard)
+        self.assertIn('envelope_body.edges.count <= 0', guard)
+        self.assertIn('envelope_body.vertices.count <= 0', guard)
+        self.assertIn('envelope_body.preciseBoundingBox', guard)
+        self.assertIn('cable_envelope.preciseBoundingBox', guard)
+        self.assertIn('expected_min =', guard)
+        self.assertIn('expected_max =', guard)
+        self.assertIn('actual_min + actual_max, expected_min + expected_max', guard)
+
+    def test_cable_envelope_construction_has_immediate_solid_guard(self):
+        envelope = ast.unparse(function('_build_cable_envelope'))
+        self.assertIn('extrusion.bodies.count != 1', envelope)
+        self.assertIn('component.bRepBodies.count != 1', envelope)
+        self.assertIn('not body.isValid', envelope)
+        self.assertIn('not body.isSolid', envelope)
+        self.assertIn('body.volume <= 0', envelope)
 
     def test_cable_envelope_is_reference_only_and_export_guarded(self):
         envelope = ast.unparse(function('_build_cable_envelope'))

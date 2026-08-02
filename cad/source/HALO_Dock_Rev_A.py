@@ -654,13 +654,21 @@ def _build_cable_envelope(design, root):
         'outline is intentional open-air cable clearance, not pocket material.')
     sketch = component.sketches.add(component.xYConstructionPlane)
     sketch.name = 'Controlled rounded cable clear-volume footprint'
-    body = _extrude(
+    extrusion = _extrude(
         component,
         _centered_rounded_rectangle_profile(
             sketch, design, 'cable_pocket_width', 'cable_pocket_run_depth',
             'cable_pocket_center_x', 'cable_pocket_center_y',
             'cable_pocket_corner_radius'),
-        'cable_pocket_height').bodies.item(0)
+        'cable_pocket_height')
+    if extrusion.bodies.count != 1 or component.bRepBodies.count != 1:
+        raise RuntimeError(
+            'CableEnvelope extrusion must create exactly one reference body.')
+    body = extrusion.bodies.item(0)
+    if not body or not body.isValid or not body.isSolid or body.volume <= 0:
+        raise RuntimeError(
+            'CableEnvelope extrusion did not immediately create a valid, solid, '
+            'positive-volume reference body.')
     body.name = 'CableEnvelope - REFERENCE ONLY - NEVER EXPORT'
     return component
 
@@ -681,30 +689,103 @@ def _cut_cable_profile(component, design, plane, center_y, distance, name):
 
 def _validate_cable_envelope_clear(design, cable_envelope, printable_components):
     """Use native BRep intersections to block export if any cable clash remains."""
+    compute_result = design.computeAll()
+    body_count = cable_envelope.bRepBodies.count
+    body_name = 'CableEnvelope - REFERENCE ONLY - NEVER EXPORT'
+    # This lookup happens only after computeAll. Never retain or reuse a body
+    # reference acquired before native recomputation.
+    envelope_body = cable_envelope.bRepBodies.itemByName(body_name)
+
+    width = _mm(design, 'cable_pocket_width')
+    run_depth = _mm(design, 'cable_pocket_run_depth')
+    height = _mm(design, 'cable_pocket_height')
+    center_x = _mm(design, 'cable_pocket_center_x')
+    center_y = _mm(design, 'cable_pocket_center_y')
+    expected_min = (center_x - width / 2, center_y - run_depth / 2, 0.0)
+    expected_max = (center_x + width / 2, center_y + run_depth / 2, height)
+
+    approximate_bounds = envelope_body.boundingBox if envelope_body else None
+    precise_bounds = envelope_body.preciseBoundingBox if envelope_body else None
+    component_bounds = cable_envelope.preciseBoundingBox
+
+    def _box_diagnostic(box):
+        if not box:
+            return 'unavailable'
+        return ('min=({:.3f}, {:.3f}, {:.3f}) mm; max=({:.3f}, {:.3f}, '
+                '{:.3f}) mm').format(
+                    box.minPoint.x * 10, box.minPoint.y * 10,
+                    box.minPoint.z * 10, box.maxPoint.x * 10,
+                    box.maxPoint.y * 10, box.maxPoint.z * 10)
+
+    def _diagnostics(reason):
+        named_lookup = envelope_body.name if envelope_body else 'MISSING'
+        is_valid = envelope_body.isValid if envelope_body else False
+        is_solid = envelope_body.isSolid if envelope_body else False
+        volume = envelope_body.volume * 1000 if envelope_body else 0.0
+        faces = envelope_body.faces.count if envelope_body else 0
+        edges = envelope_body.edges.count if envelope_body else 0
+        vertices = envelope_body.vertices.count if envelope_body else 0
+        revision = envelope_body.revisionId if envelope_body else 'MISSING'
+        return (
+            reason + '\nCableEnvelope native diagnostics:'
+            '\n  computeAll result: ' + str(compute_result) +
+            '\n  component body count: ' + str(body_count) +
+            '\n  named-body lookup result: ' + named_lookup +
+            '\n  body.isValid: ' + str(is_valid) +
+            '\n  body.isSolid: ' + str(is_solid) +
+            '\n  body.volume (mm^3): {:.6f}'.format(volume) +
+            '\n  face/edge/vertex counts: {}/{}/{}'.format(
+                faces, edges, vertices) +
+            '\n  body revisionId: ' + str(revision) +
+            '\n  approximate boundingBox: ' +
+            _box_diagnostic(approximate_bounds) +
+            '\n  preciseBoundingBox: ' + _box_diagnostic(precise_bounds) +
+            '\n  component preciseBoundingBox: ' +
+            _box_diagnostic(component_bounds) +
+            '\n  expected min=({:.3f}, {:.3f}, {:.3f}) mm; '
+            'max=({:.3f}, {:.3f}, {:.3f}) mm'.format(
+                expected_min[0] * 10, expected_min[1] * 10,
+                expected_min[2] * 10, expected_max[0] * 10,
+                expected_max[1] * 10, expected_max[2] * 10))
+
+    if not compute_result:
+        raise RuntimeError(_diagnostics(
+            'CableEnvelope validation blocked because design.computeAll() failed.'))
+    if body_count != 1 or not envelope_body:
+        raise RuntimeError(_diagnostics(
+            'CableEnvelope must contain exactly one controlled named body.'))
+    if (not envelope_body.isValid or not envelope_body.isSolid or
+            envelope_body.volume <= 0 or envelope_body.faces.count <= 0 or
+            envelope_body.edges.count <= 0 or envelope_body.vertices.count <= 0):
+        raise RuntimeError(_diagnostics(
+            'CableEnvelope BRep is invalid, empty, non-solid, or lacks topology.'))
+
+    tolerance = 0.01  # Fusion internal centimetres: 0.1 mm; do not increase.
+    actual_min = (
+        precise_bounds.minPoint.x, precise_bounds.minPoint.y,
+        precise_bounds.minPoint.z)
+    actual_max = (
+        precise_bounds.maxPoint.x, precise_bounds.maxPoint.y,
+        precise_bounds.maxPoint.z)
+    component_min = (
+        component_bounds.minPoint.x, component_bounds.minPoint.y,
+        component_bounds.minPoint.z)
+    component_max = (
+        component_bounds.maxPoint.x, component_bounds.maxPoint.y,
+        component_bounds.maxPoint.z)
+    coordinates = zip(
+        actual_min + actual_max, expected_min + expected_max)
+    if any(abs(actual - expected) > tolerance for actual, expected in coordinates):
+        raise RuntimeError(_diagnostics(
+            'CableEnvelope is valid but has incorrect world-space geometry or location.'))
+    body_component_coordinates = zip(
+        actual_min + actual_max, component_min + component_max)
+    if any(abs(body - component) > tolerance
+           for body, component in body_component_coordinates):
+        raise RuntimeError(_diagnostics(
+            'CableEnvelope body and component precise bounding boxes disagree.'))
+
     manager = adsk.fusion.TemporaryBRepManager.get()
-    envelope_body = cable_envelope.bRepBodies.item(0)
-    bounds = envelope_body.boundingBox
-    actual = (
-        bounds.maxPoint.x - bounds.minPoint.x,
-        bounds.maxPoint.y - bounds.minPoint.y,
-        bounds.maxPoint.z - bounds.minPoint.z,
-    )
-    expected = (
-        _mm(design, 'cable_pocket_width'),
-        _mm(design, 'cable_pocket_run_depth'),
-        _mm(design, 'cable_pocket_height'),
-    )
-    if any(abs(value - target) > 0.01 for value, target in zip(actual, expected)):
-        raise RuntimeError(
-            'CableEnvelope world-axis extents are outside the 0.1 mm tolerance. '
-            'Expected X/Y/Z (mm): {:.3f}, {:.3f}, {:.3f}; actual X/Y/Z '
-            '(mm): {:.3f}, {:.3f}, {:.3f}; min X/Y/Z (mm): {:.3f}, '
-            '{:.3f}, {:.3f}; max X/Y/Z (mm): {:.3f}, {:.3f}, {:.3f}.'.format(
-                expected[0] * 10, expected[1] * 10, expected[2] * 10,
-                actual[0] * 10, actual[1] * 10, actual[2] * 10,
-                bounds.minPoint.x * 10, bounds.minPoint.y * 10,
-                bounds.minPoint.z * 10, bounds.maxPoint.x * 10,
-                bounds.maxPoint.y * 10, bounds.maxPoint.z * 10))
     for component in printable_components:
         for index in range(component.bRepBodies.count):
             intersection = manager.copy(envelope_body)
@@ -713,9 +794,9 @@ def _validate_cable_envelope_clear(design, cable_envelope, printable_components)
                 intersection, printable,
                 adsk.fusion.BooleanTypes.IntersectionBooleanType)
             if intersects and intersection.physicalProperties.volume > 1e-9:
-                raise RuntimeError(
+                raise RuntimeError(_diagnostics(
                     'CableEnvelope intersects ' + component.name +
-                    ' after controlled cuts; printable export is blocked.')
+                    ' after controlled cuts; printable export is blocked.'))
 
 
 def _ring_profile(sketch):
