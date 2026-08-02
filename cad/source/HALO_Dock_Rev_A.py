@@ -685,9 +685,7 @@ def _build_wall_interface(design, root):
 
 
 def _open_corner_l_profile(sketch, design, band_expression):
-    """Create one closed L solid profile, never a nested/closed ring profile."""
-    outer_w = _mm(design, 'coupon_corner_outer_width')
-    outer_h = _mm(design, 'coupon_corner_outer_height')
+    """Create one closed, origin-datumed L with equal parameter-driven arms."""
     radius = _mm(design, 'device_corner_radius') + _mm(design, 'bezel_width')
     arm = _mm(design, 'coupon_corner_arm_length')
     # Both current band expressions are simple sums/differences of known
@@ -696,70 +694,85 @@ def _open_corner_l_profile(sketch, design, band_expression):
         band = _mm(design, 'bezel_width') + _mm(design, 'inner_lip_overlap')
     else:
         band = _mm(design, 'bezel_width') - _mm(design, 'pocket_clearance_x')
-    right, top = outer_w / 2, outer_h / 2
-    center = (right - radius, top - radius)
-    points = (
-        (center[0], top), (right - arm, top),
-        (right - arm, top - band), (center[0], top - band),
-    )
+    if band <= 0 or band >= radius or arm <= radius:
+        raise RuntimeError(
+            'Open corner coupon requires 0 < band width < outer radius < arm length.')
+
+    # Put the theoretical sharp outer corner on the sketch origin.  Two simple
+    # construction legs define the 52 x 52 mm envelope; the equal constraint
+    # means only one arm-length dimension is required.  All solid-profile
+    # entities then depend on those datums, one band dimension, and one radius.
+    center = (-radius, -radius)
     lines = sketch.sketchCurves.sketchLines
-    entities = []
-    for start, end in zip(points[:-1], points[1:]):
-        entities.append(lines.addByTwoPoints(
-            adsk.core.Point3D.create(start[0], start[1], 0),
-            adsk.core.Point3D.create(end[0], end[1], 0),
-        ))
-    inner_arc = sketch.sketchCurves.sketchArcs.addByCenterStartSweep(
+    arcs = sketch.sketchCurves.sketchArcs
+    outer_top = lines.addByTwoPoints(
+        adsk.core.Point3D.create(-arm, 0, 0),
+        adsk.core.Point3D.create(-radius, 0, 0))
+    outer_arc = arcs.addByCenterStartSweep(
         adsk.core.Point3D.create(center[0], center[1], 0),
-        adsk.core.Point3D.create(center[0], top - band, 0),
+        adsk.core.Point3D.create(-radius, 0, 0),
         -3.141592653589793 / 2,
     )
-    inner_right = inner_arc.endSketchPoint
-    inner_end = lines.addByTwoPoints(
-        inner_right, adsk.core.Point3D.create(right - band, top - arm, 0))
-    outer_end = lines.addByTwoPoints(
-        inner_end.endSketchPoint, adsk.core.Point3D.create(right, top - arm, 0))
-    outer_tangent = lines.addByTwoPoints(
-        outer_end.endSketchPoint, adsk.core.Point3D.create(right, center[1], 0))
-    entities.extend((inner_end, outer_end, outer_tangent))
-    outer_arc = sketch.sketchCurves.sketchArcs.addByCenterStartSweep(
+    outer_side = lines.addByTwoPoints(
+        outer_arc.endSketchPoint, adsk.core.Point3D.create(0, -arm, 0))
+    side_end = lines.addByTwoPoints(
+        outer_side.endSketchPoint, adsk.core.Point3D.create(-band, -arm, 0))
+    inner_side = lines.addByTwoPoints(
+        side_end.endSketchPoint,
+        adsk.core.Point3D.create(-band, -radius, 0))
+    inner_arc = arcs.addByCenterStartSweep(
         adsk.core.Point3D.create(center[0], center[1], 0),
-        outer_tangent.endSketchPoint,
+        adsk.core.Point3D.create(-band, -radius, 0),
         3.141592653589793 / 2,
     )
-    # The outer arc ends on the first line's start point; adding a zero-length
-    # closing line here makes Fusion reject the profile on native execution.
+    inner_top = lines.addByTwoPoints(
+        inner_arc.endSketchPoint, adsk.core.Point3D.create(-arm, -band, 0))
+    top_end = lines.addByTwoPoints(inner_top.endSketchPoint, outer_top.startSketchPoint)
+
+    top_arm_datum = lines.addByTwoPoints(
+        outer_top.startSketchPoint, sketch.originPoint)
+    side_arm_datum = lines.addByTwoPoints(
+        sketch.originPoint, outer_side.endSketchPoint)
+    top_arm_datum.isConstruction = True
+    side_arm_datum.isConstruction = True
+
     constraints = sketch.geometricConstraints
-    constraints.addCoincident(entities[2].endSketchPoint, inner_arc.startSketchPoint)
-    constraints.addCoincident(outer_arc.endSketchPoint, entities[0].startSketchPoint)
-    constraints.addTangent(entities[2], inner_arc)
-    constraints.addTangent(inner_arc, entities[3])
-    constraints.addTangent(entities[5], outer_arc)
-    constraints.addTangent(outer_arc, entities[0])
+    constraints.addCoincident(outer_top.endSketchPoint, outer_arc.startSketchPoint)
+    constraints.addCoincident(inner_side.endSketchPoint, inner_arc.startSketchPoint)
+    constraints.addTangent(outer_top, outer_arc)
+    constraints.addTangent(outer_arc, outer_side)
+    constraints.addTangent(inner_side, inner_arc)
+    constraints.addTangent(inner_arc, inner_top)
+    constraints.addConcentric(outer_arc, inner_arc)
+    constraints.addHorizontal(outer_top)
+    constraints.addHorizontal(side_end)
+    constraints.addHorizontal(inner_top)
+    constraints.addVertical(outer_side)
+    constraints.addVertical(inner_side)
+    constraints.addVertical(top_end)
+    constraints.addHorizontal(top_arm_datum)
+    constraints.addVertical(side_arm_datum)
+    constraints.addEqual(top_arm_datum, side_arm_datum)
 
     dims = sketch.sketchDimensions
     horizontal = adsk.fusion.DimensionOrientations.HorizontalDimensionOrientation
     vertical = adsk.fusion.DimensionOrientations.VerticalDimensionOrientation
-    expressions = (
-        ('coupon_corner_arm_length - (device_corner_radius + bezel_width)', horizontal),
-        (band_expression, vertical),
-        (f'coupon_corner_arm_length - (device_corner_radius + bezel_width)', horizontal),
-        (f'coupon_corner_arm_length - (device_corner_radius + bezel_width)', vertical),
-        (band_expression, horizontal),
-        ('coupon_corner_arm_length - (device_corner_radius + bezel_width)', vertical),
-    )
-    for entity, (expression, orientation) in zip(entities, expressions):
-        dimension = dims.addDistanceDimension(
-            entity.startSketchPoint, entity.endSketchPoint, orientation,
-            adsk.core.Point3D.create(entity.startSketchPoint.geometry.x, entity.startSketchPoint.geometry.y, 0),
-        )
-        _set_dimension_expression(dimension, expression)
-    outer_radial = dims.addRadialDimension(outer_arc, adsk.core.Point3D.create(right, top, 0))
+    arm_dimension = dims.addDistanceDimension(
+        top_arm_datum.startSketchPoint, top_arm_datum.endSketchPoint,
+        horizontal, adsk.core.Point3D.create(-arm / 2, radius, 0))
+    _set_dimension_expression(arm_dimension, 'coupon_corner_arm_length')
+    band_dimension = dims.addDistanceDimension(
+        top_end.startSketchPoint, top_end.endSketchPoint, vertical,
+        adsk.core.Point3D.create(-arm - band, -band / 2, 0))
+    _set_dimension_expression(band_dimension, band_expression)
+    outer_radial = dims.addRadialDimension(
+        outer_arc, adsk.core.Point3D.create(-radius, radius / 2, 0))
     _set_dimension_expression(outer_radial, 'device_corner_radius + bezel_width')
-    inner_radial = dims.addRadialDimension(inner_arc, adsk.core.Point3D.create(
-        right - band, top - band, 0))
-    _set_dimension_expression(
-        inner_radial, f'device_corner_radius + bezel_width - ({band_expression})')
+
+    if sketch.profiles.count != 1:
+        raise RuntimeError(
+            'Open corner sketch must resolve to exactly one closed profile; found '
+            + str(sketch.profiles.count) + '.')
     return sketch.profiles.item(0)
 
 
@@ -779,9 +792,30 @@ def _build_faceplate_corner_coupon(design, root):
     skirt_sketch.name = 'OPEN L rear skirt profile - pocket side remains open'
     skirt = _extrude(component, _open_corner_l_profile(
         skirt_sketch, design, 'bezel_width - pocket_clearance_x'),
-        'front_thickness - screen_recess')
+        'front_thickness - screen_recess',
+        adsk.fusion.FeatureOperations.JoinFeatureOperation)
     skirt.name = 'Open L rear perimeter skirt and pocket clearance witness'
     return component
+
+
+def _validate_open_corner_coupon(component, design):
+    """Reject a disconnected or collapsed native coupon before any export."""
+    if component.bRepBodies.count != 1:
+        raise RuntimeError(
+            'Open corner coupon export blocked: expected exactly one joined BRep '
+            'body, found ' + str(component.bRepBodies.count) +
+            '. Regenerate and verify the rear-skirt Join operation in Fusion.')
+    bounds = component.bRepBodies.item(0).boundingBox
+    width = bounds.maxPoint.x - bounds.minPoint.x
+    height = bounds.maxPoint.y - bounds.minPoint.y
+    expected = _mm(design, 'coupon_corner_arm_length')
+    tolerance = 0.01  # Fusion internal centimetres: 0.1 mm.
+    if abs(width - expected) > tolerance or abs(height - expected) > tolerance:
+        raise RuntimeError(
+            'Open corner coupon export blocked: expected XY extents of '
+            'coupon_corner_arm_length ({:.3f} x {:.3f} mm), got {:.3f} x '
+            '{:.3f} mm. Inspect the open-L profile constraints before export.'.format(
+                expected * 10, expected * 10, width * 10, height * 10))
 
 
 def _build_guide_shelf_coupon(design, root):
@@ -921,6 +955,8 @@ def _export_outputs(design, coupons, faceplate, dock_body):
         # Each tuple is one printable component and one controlled Part ID.
         # Full parts and root/reference geometry are absent from this list.
         for component, part_id in coupons:
+            if part_id == COUPON_PART_IDS['corner']:
+                _validate_open_corner_coupon(component, design)
             _export_printable_part(export_manager, component, output_dir, part_id)
     else:
         _validate_full_size_release(design)
