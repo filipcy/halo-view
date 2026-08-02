@@ -170,13 +170,50 @@ class Sprint3StaticGuards(unittest.TestCase):
             self.assertIn(expression, SOURCE)
         dock = ast.unparse(function('_build_dock_body'))
         for feature in ('camera_keepout_depth', 'button_relief_depth',
-                        'cable_pocket_run_depth', 'speaker_slot_width'):
+                        'cable_pocket_center_y', 'speaker_slot_width'):
             self.assertIn(feature, dock)
         validate = ast.unparse(function('_validate_iteration_2_geometry'))
         for message in ('Camera Keep-out', 'Button Relief', 'Cable Pocket', 'Speaker slot'):
             self.assertIn(message, validate)
         for prohibited in ('jack_opening', 'microsd', 'microphone_opening'):
             self.assertNotIn(prohibited, SOURCE.lower())
+
+    def test_cable_radius_is_real_positive_sweep_geometry(self):
+        rounded = ast.unparse(function('_centered_rounded_rectangle_profile'))
+        self.assertIn("_mm(design, radius_name)", rounded)
+        self.assertIn('addByCenterStartSweep', rounded)
+        self.assertIn('_set_dimension_expression(radial, radius_name)', rounded)
+        self.assertNotIn('-quarter_turn', rounded)
+        cutter = ast.unparse(function('_cut_cable_profile'))
+        self.assertIn("'cable_pocket_corner_radius'", cutter)
+        self.assertIn('_centered_rounded_rectangle_profile', cutter)
+
+    def test_cable_envelope_is_reference_only_and_export_guarded(self):
+        envelope = ast.unparse(function('_build_cable_envelope'))
+        self.assertIn("_new_component(root, 'CableEnvelope')", envelope)
+        self.assertIn('NON-PRINTABLE', envelope)
+        self.assertIn('intentional open-air cable clearance', envelope)
+        self.assertIn("'cable_pocket_width'", envelope)
+        self.assertIn("'cable_pocket_run_depth'", envelope)
+        self.assertIn("'cable_pocket_height'", envelope)
+        export = ast.unparse(function('_export_outputs'))
+        self.assertIn('_validate_cable_envelope_clear', export)
+        self.assertNotIn('_export_printable_part(export_manager, cable_envelope', export)
+
+    def test_every_intersecting_printable_and_coupons_receive_cable_cut(self):
+        faceplate = ast.unparse(function('_build_faceplate'))
+        dock = ast.unparse(function('_build_dock_body'))
+        guide = ast.unparse(function('_build_guide_shelf_coupon'))
+        cable_coupon = ast.unparse(function('_build_faceplate_cable_coupon'))
+        self.assertIn('_cut_cable_profile', faceplate)
+        self.assertGreaterEqual(dock.count('_cut_cable_profile'), 2)
+        self.assertIn('_cut_cable_profile', guide)
+        self.assertIn('speaker_slot_width', guide)
+        self.assertIn('_cut_cable_profile', cable_coupon)
+        self.assertIn('component.bRepBodies.count != 1', cable_coupon)
+        self.assertIn(
+            'HALO_Dock_Rev_A_Faceplate_USB_C_Cable_Pocket',
+            assignment('COUPON_PART_IDS').values())
 
     def test_dual_lock_is_measurement_gated(self):
         self.assertNotIn('dual_lock_engaged_thickness', SOURCE)
@@ -240,6 +277,7 @@ class Sprint3StaticGuards(unittest.TestCase):
             'HALO_Dock_Rev_A_Faceplate_Open_Corner_L_R8_5',
             'HALO_Dock_Rev_A_Faceplate_Open_Corner_L_R9_0',
             'HALO_Dock_Rev_A_Side_Guide_Lower_Shelf',
+            'HALO_Dock_Rev_A_Faceplate_USB_C_Cable_Pocket',
             'HALO_Dock_Rev_A_Wall_Stack_Shadow_Gap_Right',
             'HALO_Dock_Rev_A_Wall_Stack_Shadow_Gap_Left',
             'HALO_Dock_Rev_A_Faceplate_PRINT_CANDIDATE_ONLY',

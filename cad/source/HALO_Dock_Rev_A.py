@@ -38,6 +38,7 @@ COUPON_PART_IDS = {
     'corner_R8_0': 'HALO_Dock_Rev_A_Faceplate_Open_Corner_L_R8_0',
     'corner_R8_5': 'HALO_Dock_Rev_A_Faceplate_Open_Corner_L_R8_5',
     'corner_R9_0': 'HALO_Dock_Rev_A_Faceplate_Open_Corner_L_R9_0',
+    'faceplate_cable': 'HALO_Dock_Rev_A_Faceplate_USB_C_Cable_Pocket',
     'guide': 'HALO_Dock_Rev_A_Side_Guide_Lower_Shelf',
     'wall_right': 'HALO_Dock_Rev_A_Wall_Stack_Shadow_Gap_Right',
     'wall_left': 'HALO_Dock_Rev_A_Wall_Stack_Shadow_Gap_Left',
@@ -144,6 +145,11 @@ PARAMETERS = (
     ('speaker_slot_center_y', 'shelf_center_y', 'Keep-outs', 'Speaker slot contained in lower shelf'),
     ('speaker_slot_width', '20 mm', 'Keep-outs', 'Single lower-speaker opening width'),
     ('speaker_slot_height', '5 mm', 'Keep-outs', 'Acoustic opening height through shelf depth'),
+    ('coupon_cable_center_y', '-coupon_guide_length / 2 - cable_pocket_run_depth / 2', 'Coupons', 'Open-air cable envelope below shortened guide coupon edge'),
+    ('faceplate_cable_coupon_width', '52 mm', 'Coupons', 'Connected bottom-centre Faceplate cable test span'),
+    ('faceplate_cable_coupon_band_height', 'bezel_width + inner_lip_overlap', 'Coupons', 'Real visible-lip bottom band height'),
+    ('faceplate_cable_coupon_center_x', 'cable_pocket_center_x', 'Coupons', 'Coupon retains the controlled tablet-edge X datum'),
+    ('faceplate_cable_coupon_center_y', '-device_height / 2 - faceplate_cable_coupon_band_height / 2', 'Coupons', 'Real bottom Faceplate band location'),
 )
 
 
@@ -357,6 +363,60 @@ def _centered_rectangle_profile(
     return sketch.profiles.item(sketch.profiles.count - 1)
 
 
+def _centered_rounded_rectangle_profile(
+    sketch, design, width_name, height_name, center_x, center_y, radius_name
+):
+    """Create a deterministic rounded clearance profile with positive sweeps."""
+    width = _mm(design, width_name)
+    height = _mm(design, height_name)
+    cx = _mm(design, center_x)
+    cy = _mm(design, center_y)
+    radius = _mm(design, radius_name)
+    if radius <= 0 or 2 * radius >= min(width, height):
+        raise RuntimeError('Rounded profile radius must be positive and smaller than half each side.')
+    left, right = cx - width / 2, cx + width / 2
+    bottom, top = cy - height / 2, cy + height / 2
+    lines = sketch.sketchCurves.sketchLines
+    arcs = sketch.sketchCurves.sketchArcs
+    top_line = lines.addByTwoPoints(
+        adsk.core.Point3D.create(left + radius, top, 0),
+        adsk.core.Point3D.create(right - radius, top, 0))
+    right_line = lines.addByTwoPoints(
+        adsk.core.Point3D.create(right, bottom + radius, 0),
+        adsk.core.Point3D.create(right, top - radius, 0))
+    bottom_line = lines.addByTwoPoints(
+        adsk.core.Point3D.create(left + radius, bottom, 0),
+        adsk.core.Point3D.create(right - radius, bottom, 0))
+    left_line = lines.addByTwoPoints(
+        adsk.core.Point3D.create(left, bottom + radius, 0),
+        adsk.core.Point3D.create(left, top - radius, 0))
+    quarter_turn = 3.141592653589793 / 2
+    corner_arcs = (
+        arcs.addByCenterStartSweep(
+            adsk.core.Point3D.create(right - radius, top - radius, 0),
+            right_line.endSketchPoint, quarter_turn),
+        arcs.addByCenterStartSweep(
+            adsk.core.Point3D.create(left + radius, top - radius, 0),
+            top_line.startSketchPoint, quarter_turn),
+        arcs.addByCenterStartSweep(
+            adsk.core.Point3D.create(left + radius, bottom + radius, 0),
+            left_line.startSketchPoint, quarter_turn),
+        arcs.addByCenterStartSweep(
+            adsk.core.Point3D.create(right - radius, bottom + radius, 0),
+            bottom_line.endSketchPoint, quarter_turn),
+    )
+    dimensions = sketch.sketchDimensions
+    for arc in corner_arcs:
+        radial = dimensions.addRadialDimension(
+            arc, adsk.core.Point3D.create(cx, cy, 0))
+        _set_dimension_expression(radial, radius_name)
+    # Width/height and edge-derived centres seed the deterministic profile on
+    # every generator run; radius remains a live, controlled CAD expression.
+    if sketch.profiles.count != 1:
+        raise RuntimeError('Rounded cable profile must resolve to exactly one closed profile.')
+    return sketch.profiles.item(0)
+
+
 def _validate_iteration_2_geometry(design):
     device_thickness = _mm(design, 'device_thickness')
     screen_recess = _mm(design, 'screen_recess')
@@ -505,6 +565,66 @@ def _build_tablet_envelope(design, root):
     return component
 
 
+def _build_cable_envelope(design, root):
+    """Build the controlled 18 x 8 x 20 mm open-air clearance reference."""
+    component = _new_component(root, 'CableEnvelope')
+    component.description = (
+        'NON-PRINTABLE controlled USB-C clearance. The run outside the Dock '
+        'outline is intentional open-air cable clearance, not pocket material.')
+    sketch = component.sketches.add(component.xYConstructionPlane)
+    sketch.name = 'Controlled rounded cable clear-volume footprint'
+    body = _extrude(
+        component,
+        _centered_rounded_rectangle_profile(
+            sketch, design, 'cable_pocket_width', 'cable_pocket_run_depth',
+            'cable_pocket_center_x', 'cable_pocket_center_y',
+            'cable_pocket_corner_radius'),
+        'cable_pocket_height').bodies.item(0)
+    body.name = 'CableEnvelope - REFERENCE ONLY - NEVER EXPORT'
+    return component
+
+
+def _cut_cable_profile(component, design, plane, center_y, distance, name):
+    """Cut the same controlled rounded cable footprint from printable geometry."""
+    sketch = component.sketches.add(plane)
+    sketch.name = name + ' rounded footprint'
+    cut = _extrude(
+        component,
+        _centered_rounded_rectangle_profile(
+            sketch, design, 'cable_pocket_width', 'cable_pocket_run_depth',
+            'cable_pocket_center_x', center_y, 'cable_pocket_corner_radius'),
+        distance, adsk.fusion.FeatureOperations.CutFeatureOperation)
+    cut.name = name + ' - controlled 2 mm internal radius'
+    return cut
+
+
+def _validate_cable_envelope_clear(cable_envelope, printable_components):
+    """Use native BRep intersections to block export if any cable clash remains."""
+    manager = adsk.fusion.TemporaryBRepManager.get()
+    envelope_body = cable_envelope.bRepBodies.item(0)
+    bounds = envelope_body.boundingBox
+    actual = (
+        bounds.maxPoint.x - bounds.minPoint.x,
+        bounds.maxPoint.y - bounds.minPoint.y,
+        bounds.maxPoint.z - bounds.minPoint.z,
+    )
+    expected = (1.8, 2.0, 0.8)  # Fusion internal centimetres: 18 x 20 x 8 mm.
+    if any(abs(value - target) > 0.01 for value, target in zip(actual, expected)):
+        raise RuntimeError(
+            'CableEnvelope must remain the controlled 18 x 8 x 20 mm clear volume.')
+    for component in printable_components:
+        for index in range(component.bRepBodies.count):
+            intersection = manager.copy(envelope_body)
+            printable = manager.copy(component.bRepBodies.item(index))
+            intersects = manager.booleanOperation(
+                intersection, printable,
+                adsk.fusion.BooleanTypes.IntersectionBooleanType)
+            if intersects and intersection.physicalProperties.volume > 1e-9:
+                raise RuntimeError(
+                    'CableEnvelope intersects ' + component.name +
+                    ' after controlled cuts; printable export is blocked.')
+
+
 def _ring_profile(sketch):
     ring_profiles = []
     for index in range(sketch.profiles.count):
@@ -594,6 +714,10 @@ def _build_faceplate(design, root):
     )
     skirt_feature.name = 'Rear perimeter skirt - outside tablet envelope'
     skirt_feature.bodies.item(0).name = 'HALO Faceplate Rev A - rear perimeter skirt'
+    _cut_cable_profile(
+        component, design, skirt_rear_plane, 'cable_pocket_center_y',
+        'front_thickness - screen_recess',
+        'Faceplate rear-skirt USB-C cable clearance')
     return component
 
 
@@ -637,18 +761,10 @@ def _build_dock_body(design, root):
     # The rear portion of the generic USB cable pocket opens at the bottom of
     # DockBody and joins the lower-shelf opening below. No connector model is
     # encoded in this deliberately generous envelope.
-    cable_rear_sketch = component.sketches.add(component.xYConstructionPlane)
-    cable_rear_sketch.name = 'Generic USB-C cable pocket to rear management volume'
-    cable_rear = _extrude(
-        component,
-        _centered_rectangle_profile(
-            cable_rear_sketch, design, 'cable_pocket_width',
-            'cable_pocket_run_depth', 'cable_pocket_center_x',
-            'cable_pocket_center_y'),
-        '-dock_back_thickness',
-        adsk.fusion.FeatureOperations.CutFeatureOperation,
-    )
-    cable_rear.name = 'Open-bottom cable run with nominal 2 mm internal corner radius'
+    _cut_cable_profile(
+        component, design, component.xYConstructionPlane,
+        'cable_pocket_center_y', '-dock_back_thickness',
+        'DockBody backing USB-C cable clearance to rear management volume')
 
     # A measured stack thicker than the visible gap is received by two
     # discrete rear pockets.  The selected Dual Lock then ends on the pocket
@@ -737,18 +853,10 @@ def _build_dock_body(design, root):
     )
     speaker_slot.name = 'One simple lower-speaker opening - no grille'
 
-    cable_shelf_sketch = component.sketches.add(component.xYConstructionPlane)
-    cable_shelf_sketch.name = 'Cable pocket opening through lower shelf'
-    cable_shelf = _extrude(
-        component,
-        _centered_rectangle_profile(
-            cable_shelf_sketch, design, 'cable_pocket_width',
-            'cable_pocket_run_depth', 'cable_pocket_center_x',
-            'cable_pocket_center_y'),
-        'cable_pocket_height',
-        adsk.fusion.FeatureOperations.CutFeatureOperation,
-    )
-    cable_shelf.name = 'Generic open-bottom plug and cable height envelope'
+    _cut_cable_profile(
+        component, design, component.xYConstructionPlane,
+        'cable_pocket_center_y', 'cable_pocket_height',
+        'Lower-shelf USB-C connector housing clearance')
 
     for side, center_x in (
         ('Right', 'retention_center_x'),
@@ -928,7 +1036,7 @@ def _validate_open_corner_coupon(component, design):
 
 def _build_guide_shelf_coupon(design, root):
     component = _new_component(root, 'Coupon_Side_Guide_Lower_Shelf')
-    component.description = 'Full device-width pocket with shortened open-top rails and full seating shelf.'
+    component.description = 'Full-width guide coupon with the real rounded cable pocket and single speaker slot.'
     shelf_sketch = component.sketches.add(component.xYConstructionPlane)
     shelf = _extrude(component, _centered_rectangle_profile(
         shelf_sketch, design, 'coupon_shelf_width', 'lower_support_thickness',
@@ -944,6 +1052,55 @@ def _build_guide_shelf_coupon(design, root):
             center_x, 'coupon_guide_center_y'), 'guide_depth',
             adsk.fusion.FeatureOperations.JoinFeatureOperation)
         rail.name = side + ' shortened guide coupon rail'
+    _cut_cable_profile(
+        component, design, component.xYConstructionPlane,
+        'coupon_cable_center_y', 'cable_pocket_height',
+        'Guide coupon USB-C cable clearance')
+    speaker_sketch = component.sketches.add(component.xYConstructionPlane)
+    speaker = _extrude(
+        component, _centered_rectangle_profile(
+            speaker_sketch, design, 'speaker_slot_width',
+            'lower_support_thickness', 'speaker_slot_center_x',
+            'coupon_shelf_center_y'),
+        'speaker_slot_height', adsk.fusion.FeatureOperations.CutFeatureOperation)
+    speaker.name = 'Guide coupon single lower-speaker opening'
+    return component
+
+
+def _build_faceplate_cable_coupon(design, root):
+    """Build one connected bottom-centre Faceplate/cable fit article."""
+    component = _new_component(root, 'Coupon_Faceplate_USB_C_Cable_Pocket')
+    component.description = (
+        'Real Faceplate lip/skirt depths and controlled rounded cable cut; '
+        'verify tablet insertion, connector housing, bend freedom, and no skirt contact.')
+    lip_plane = _offset_plane(component, 'pocket_depth', 'Cable coupon lip rear datum')
+    lip_sketch = component.sketches.add(lip_plane)
+    lip = _extrude(
+        component, _centered_rectangle_profile(
+            lip_sketch, design, 'faceplate_cable_coupon_width',
+            'faceplate_cable_coupon_band_height',
+            'faceplate_cable_coupon_center_x', 'faceplate_cable_coupon_center_y'),
+        'screen_recess')
+    lip.name = 'Real visible Faceplate bottom lip segment'
+    skirt_plane = _offset_plane(
+        component, 'pocket_depth + screen_recess - front_thickness',
+        'Cable coupon rear-skirt datum')
+    skirt_sketch = component.sketches.add(skirt_plane)
+    skirt = _extrude(
+        component, _centered_rectangle_profile(
+            skirt_sketch, design, 'faceplate_cable_coupon_width',
+            'faceplate_cable_coupon_band_height',
+            'faceplate_cable_coupon_center_x', 'faceplate_cable_coupon_center_y'),
+        'front_thickness - screen_recess',
+        adsk.fusion.FeatureOperations.JoinFeatureOperation)
+    skirt.name = 'Joined real Faceplate rear-skirt segment'
+    _cut_cable_profile(
+        component, design, skirt_plane, 'cable_pocket_center_y',
+        'front_thickness - screen_recess',
+        'Faceplate coupon rear-skirt USB-C clearance')
+    if component.bRepBodies.count != 1:
+        raise RuntimeError(
+            'Faceplate cable coupon must remain one printable BRep after its cable cut.')
     return component
 
 
@@ -1051,7 +1208,7 @@ def _validate_full_size_release(design):
         )
 
 
-def _export_outputs(design, coupons, faceplate, dock_body):
+def _export_outputs(design, coupons, faceplate, dock_body, cable_envelope):
     if EXPORT_MODE not in (COUPONS_ONLY, FULL_SIZE_PRINT_CANDIDATE):
         raise RuntimeError('Unknown EXPORT_MODE: ' + str(EXPORT_MODE))
     root_dir = os.path.join(os.path.expanduser('~'), 'Documents', 'HALO_Dock_Rev_A')
@@ -1059,6 +1216,7 @@ def _export_outputs(design, coupons, faceplate, dock_body):
         root_dir, 'coupons' if EXPORT_MODE == COUPONS_ONLY else 'print-candidate')
     os.makedirs(output_dir, exist_ok=True)
     export_manager = design.exportManager
+    _validate_cable_envelope_clear(cable_envelope, (faceplate, dock_body))
     if EXPORT_MODE == COUPONS_ONLY:
         # Each tuple is one printable component and one controlled Part ID.
         # Full parts and root/reference geometry are absent from this list.
@@ -1094,6 +1252,7 @@ def run(context):
         _set_parameters(design)
         _validate_iteration_2_geometry(design)
         _build_tablet_envelope(design, root)
+        cable_envelope = _build_cable_envelope(design, root)
         faceplate = _build_faceplate(design, root)
         dock_body = _build_dock_body(design, root)
         if _dual_lock_measurement(design, required=False):
@@ -1115,6 +1274,8 @@ def run(context):
             ))
         coupons.append((_build_guide_shelf_coupon(design, root),
             COUPON_PART_IDS['guide']))
+        coupons.append((_build_faceplate_cable_coupon(design, root),
+            COUPON_PART_IDS['faceplate_cable']))
         if _dual_lock_measurement(design, required=False):
             coupons.extend((
                 (_build_wall_coupon_field(
@@ -1124,7 +1285,8 @@ def run(context):
                     design, root, 'Left', 'wall_coupon_center_x_left'),
                  COUPON_PART_IDS['wall_left']),
             ))
-        output_dir = _export_outputs(design, coupons, faceplate, dock_body)
+        output_dir = _export_outputs(
+            design, coupons, faceplate, dock_body, cable_envelope)
         if UI:
             message = 'HALO Dock Rev A generated in ' + EXPORT_MODE + ' mode and exported to:\n' + output_dir
             if not _dual_lock_measurement(design, required=False):
