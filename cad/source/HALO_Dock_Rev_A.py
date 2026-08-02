@@ -105,9 +105,6 @@ PARAMETERS = (
     ('coupon_fit_rail_width', '3 mm', 'Coupons', 'Clearance-gauge structural rail width'),
     ('coupon_fit_base_height', '3 mm', 'Coupons', 'Clearance-gauge connecting base height'),
     ('coupon_fit_outer_height', 'coupon_fit_rail_length + coupon_fit_base_height / 2', 'Coupons', 'Controlled clearance-coupon Y extent; 31.5 mm'),
-    ('coupon_fit_outer_center_y', '0 mm', 'Coupons', 'Clearance-coupon outer block Y centre'),
-    ('coupon_fit_slot_cut_height', 'coupon_fit_outer_height - coupon_fit_base_height + 1 mm', 'Coupons', 'Slot reaches 1 mm beyond the open insertion end'),
-    ('coupon_fit_slot_cut_center_y', '-coupon_fit_outer_height / 2 + coupon_fit_base_height + coupon_fit_slot_cut_height / 2', 'Coupons', 'Slot leaves the controlled 3 mm base at the closed end'),
     ('selected_clearance_coupon_slot_width', 'device_thickness + 2 * 0.3 mm', 'Coupons', '0.3 mm candidate slot selected provisionally for full-model depth parity'),
     # Exact engaged thickness must be measured on the selected mated pair.
     ('dual_lock_pad_width', '25 mm', 'Wall interface', 'Flat hidden mounting field width'),
@@ -1088,19 +1085,43 @@ def _build_clearance_coupon(design, root, clearance_text):
         f'{slot_width} + 2 * coupon_fit_rail_width',
         'Connected clearance-gauge outside width')
 
-    outer_sketch = component.sketches.add(component.xYConstructionPlane)
-    outer = _extrude(component, _centered_rectangle_profile(
-        outer_sketch, design, outer_width, 'coupon_fit_outer_height',
-        'dock_center_x', 'coupon_fit_outer_center_y'), 'lower_support_thickness',
+    evaluated_outer_width = _mm(design, outer_width)
+    evaluated_outer_height = _mm(design, 'coupon_fit_outer_height')
+    evaluated_slot_width = _mm(design, slot_width)
+    evaluated_base_height = _mm(design, 'coupon_fit_base_height')
+    left = -evaluated_outer_width / 2
+    right = evaluated_outer_width / 2
+    bottom = -evaluated_outer_height / 2
+    top = evaluated_outer_height / 2
+    slot_left = -evaluated_slot_width / 2
+    slot_right = evaluated_slot_width / 2
+    base_top = bottom + evaluated_base_height
+
+    sketch = component.sketches.add(component.xYConstructionPlane)
+    sketch.name = 'Single deterministic U profile ' + clearance_text + ' mm'
+    lines = sketch.sketchCurves.sketchLines
+    first = lines.addByTwoPoints(
+        adsk.core.Point3D.create(left, bottom, 0),
+        adsk.core.Point3D.create(right, bottom, 0))
+    previous = first
+    for x, y in (
+        (right, top),
+        (slot_right, top),
+        (slot_right, base_top),
+        (slot_left, base_top),
+        (slot_left, top),
+        (left, top),
+    ):
+        previous = lines.addByTwoPoints(
+            previous.endSketchPoint, adsk.core.Point3D.create(x, y, 0))
+    lines.addByTwoPoints(previous.endSketchPoint, first.startSketchPoint)
+    if sketch.profiles.count != 1:
+        raise RuntimeError(
+            'Clearance coupon U profile must resolve to exactly one closed profile.')
+    body = _extrude(
+        component, sketch.profiles.item(0), 'lower_support_thickness',
         adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
-    outer.name = 'One-piece clearance coupon outer block ' + clearance_text + ' mm'
-    slot_sketch = component.sketches.add(component.xYConstructionPlane)
-    slot = _extrude(component, _centered_rectangle_profile(
-        slot_sketch, design, slot_width, 'coupon_fit_slot_cut_height',
-        'dock_center_x', 'coupon_fit_slot_cut_center_y'),
-        'lower_support_thickness',
-        adsk.fusion.FeatureOperations.CutFeatureOperation)
-    slot.name = 'Open insertion slot ' + clearance_text + ' mm per side'
+    body.name = 'One-piece U clearance coupon ' + clearance_text + ' mm'
     return component
 
 

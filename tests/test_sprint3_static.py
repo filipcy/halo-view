@@ -302,27 +302,30 @@ class Sprint3StaticGuards(unittest.TestCase):
         wall = ast.unparse(function('_build_wall_coupon_field'))
         self.assertIn('JoinFeatureOperation', guide)
         self.assertNotIn('JoinFeatureOperation', fit)
-        self.assertIn('CutFeatureOperation', fit)
+        self.assertNotIn('CutFeatureOperation', fit)
         self.assertIn('measurement[0] > 0', wall)
 
-    def test_clearance_coupons_are_one_block_minus_open_slot(self):
+    def test_clearance_coupons_are_single_explicit_u_profiles(self):
         fit = ast.unparse(function('_build_clearance_coupon'))
         self.assertNotIn('JoinFeatureOperation', fit)
-        self.assertEqual(fit.count('_extrude('), 2)
+        self.assertNotIn('CutFeatureOperation', fit)
+        self.assertEqual(fit.count('component.sketches.add('), 1)
+        self.assertEqual(fit.count('_extrude('), 1)
         self.assertEqual(fit.count('NewBodyFeatureOperation'), 1)
-        self.assertEqual(fit.count('CutFeatureOperation'), 1)
-        self.assertIn('CutFeatureOperation', fit)
         self.assertIn("f'device_thickness + 2 * {parameter_name}'", fit)
         self.assertIn("f'{slot_width} + 2 * coupon_fit_rail_width'", fit)
-        self.assertIn("'coupon_fit_outer_height'", fit)
-        self.assertIn("'coupon_fit_slot_cut_height'", fit)
-        self.assertIn("'coupon_fit_slot_cut_center_y'", fit)
+        self.assertIn("_mm(design, 'coupon_fit_outer_height')", fit)
+        self.assertIn("_mm(design, 'coupon_fit_base_height')", fit)
+        self.assertIn('_mm(design, slot_width)', fit)
+        self.assertIn('_mm(design, outer_width)', fit)
+        self.assertIn('previous.endSketchPoint', fit)
+        self.assertIn('first.startSketchPoint', fit)
+        self.assertIn('sketch.profiles.count != 1', fit)
+        self.assertNotIn('sketch.geometricConstraints', fit)
+        self.assertNotIn('sketch.sketchDimensions', fit)
         self.assertIn("'lower_support_thickness'", fit)
         self.assertIn(
             "('coupon_fit_outer_height', 'coupon_fit_rail_length + coupon_fit_base_height / 2'",
-            SOURCE)
-        self.assertIn(
-            "('coupon_fit_slot_cut_height', 'coupon_fit_outer_height - coupon_fit_base_height + 1 mm'",
             SOURCE)
         self.assertEqual([8 + 2 * c for c in (0.2, 0.3, 0.4)], [8.4, 8.6, 8.8])
         self.assertEqual([8 + 2 * c + 6 for c in (0.2, 0.3, 0.4)], [14.4, 14.6, 14.8])
