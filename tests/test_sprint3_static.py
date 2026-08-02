@@ -130,6 +130,54 @@ class Sprint3StaticGuards(unittest.TestCase):
         self.assertIn('bounds.maxPoint.y - bounds.minPoint.y', guard)
         self.assertIn('_validate_open_corner_coupon(component, design)', export)
 
+    def test_three_explicit_corner_radius_candidates_are_unique_and_gated(self):
+        part_ids = assignment('COUPON_PART_IDS')
+        corner_ids = [part_ids['corner_R8_0'], part_ids['corner_R8_5'], part_ids['corner_R9_0']]
+        self.assertEqual(len(corner_ids), len(set(corner_ids)))
+        for token in ('R8_0', 'R8_5', 'R9_0'):
+            self.assertIn(token, part_ids['corner_' + token])
+            self.assertIn("('coupon_corner_radius_" + token, SOURCE)
+        self.assertIn("('device_corner_radius', '8.5 mm'", SOURCE)
+        self.assertIn('PROVISIONAL AND UNVERIFIED', SOURCE)
+        self.assertFalse(assignment('FULL_SIZE_RELEASE_GATES')['corner_radius_selected'])
+        run = ast.unparse(function('run'))
+        self.assertIn("('R8_0', 'coupon_corner_radius_R8_0')", run)
+        self.assertIn("('R8_5', 'coupon_corner_radius_R8_5')", run)
+        self.assertIn("('R9_0', 'coupon_corner_radius_R9_0')", run)
+        self.assertNotIn('device_corner_radius).expression', run)
+
+    def test_pocket_depth_drives_full_stack_and_coupon_parity_guard(self):
+        self.assertIn("('pocket_depth', 'device_thickness + 2 * pocket_clearance_z'", SOURCE)
+        self.assertIn("('guide_depth', 'pocket_depth'", SOURCE)
+        self.assertIn('total_projection_target - wall_shadow_gap - pocket_depth - screen_recess', SOURCE)
+        validate = ast.unparse(function('_validate_iteration_2_geometry'))
+        self.assertIn('clearance_z <= 0', validate)
+        self.assertIn('pocket_depth - expected_pocket_depth', validate)
+        self.assertIn('pocket_depth - selected_slot_width', validate)
+        faceplate = ast.unparse(function('_build_faceplate'))
+        corner = ast.unparse(function('_build_faceplate_corner_coupon'))
+        for geometry in (faceplate, corner):
+            self.assertIn("'pocket_depth'", geometry)
+            self.assertIn('pocket_depth + screen_recess - front_thickness', geometry)
+
+    def test_dashboard_keepouts_are_edge_based_and_physically_guarded(self):
+        for expression in (
+            "-device_width / 2 + cable_pocket_edge_x",
+            "-device_width / 2 + camera_keepout_edge_x",
+            "-device_height / 2 + camera_keepout_edge_y",
+            "-device_width / 2 + speaker_slot_edge_x",
+        ):
+            self.assertIn(expression, SOURCE)
+        dock = ast.unparse(function('_build_dock_body'))
+        for feature in ('camera_keepout_depth', 'button_relief_depth',
+                        'cable_pocket_run_depth', 'speaker_slot_width'):
+            self.assertIn(feature, dock)
+        validate = ast.unparse(function('_validate_iteration_2_geometry'))
+        for message in ('Camera Keep-out', 'Button Relief', 'Cable Pocket', 'Speaker slot'):
+            self.assertIn(message, validate)
+        for prohibited in ('jack_opening', 'microsd', 'microphone_opening'):
+            self.assertNotIn(prohibited, SOURCE.lower())
+
     def test_dual_lock_is_measurement_gated(self):
         self.assertNotIn('dual_lock_engaged_thickness', SOURCE)
         self.assertIn("('dual_lock_measured_engaged_thickness', '0 mm'", SOURCE)
@@ -188,7 +236,9 @@ class Sprint3StaticGuards(unittest.TestCase):
             'HALO_Dock_Rev_A_Clearance_0_2mm',
             'HALO_Dock_Rev_A_Clearance_0_3mm',
             'HALO_Dock_Rev_A_Clearance_0_4mm',
-            'HALO_Dock_Rev_A_Faceplate_Open_Corner_L',
+            'HALO_Dock_Rev_A_Faceplate_Open_Corner_L_R8_0',
+            'HALO_Dock_Rev_A_Faceplate_Open_Corner_L_R8_5',
+            'HALO_Dock_Rev_A_Faceplate_Open_Corner_L_R9_0',
             'HALO_Dock_Rev_A_Side_Guide_Lower_Shelf',
             'HALO_Dock_Rev_A_Wall_Stack_Shadow_Gap_Right',
             'HALO_Dock_Rev_A_Wall_Stack_Shadow_Gap_Left',
