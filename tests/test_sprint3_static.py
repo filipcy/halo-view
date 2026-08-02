@@ -38,8 +38,8 @@ class Sprint3StaticGuards(unittest.TestCase):
         self.assertNotIn('faceplate', coupon_branch.lower())
         self.assertNotIn('dockbody', coupon_branch.lower())
         self.assertNotIn('dock_body', coupon_branch.lower())
-        self.assertNotIn('createSTEPExportOptions', coupon_branch)
         self.assertNotIn('createFusionArchiveExportOptions', coupon_branch)
+        self.assertIn('_export_printable_part', coupon_branch)
 
     def test_guide_coupon_is_device_width_derived_and_symmetric(self):
         self.assertIn("('coupon_guide_inner_width', 'device_width + 2 * coupon_guide_clearance'", SOURCE)
@@ -73,10 +73,27 @@ class Sprint3StaticGuards(unittest.TestCase):
     def test_coupon_bodies_are_connected_and_zero_recess_is_safe(self):
         guide = ast.unparse(function('_build_guide_shelf_coupon'))
         fit = ast.unparse(function('_build_clearance_coupon'))
-        wall = ast.unparse(function('_build_wall_coupon'))
+        wall = ast.unparse(function('_build_wall_coupon_field'))
         self.assertIn('JoinFeatureOperation', guide)
         self.assertIn('JoinFeatureOperation', fit)
         self.assertIn('measurement[0] > 0', wall)
+
+    def test_wall_fields_are_separate_controlled_parts(self):
+        run = ast.unparse(function('run'))
+        wall = ast.unparse(function('_build_wall_coupon_field'))
+        self.assertIn("COUPON_PART_IDS['wall_right']", run)
+        self.assertIn("COUPON_PART_IDS['wall_left']", run)
+        self.assertNotIn("for side, center_x", wall)
+
+    def test_step_stl_parity_and_no_contaminated_root_export(self):
+        pair = ast.unparse(function('_export_printable_part'))
+        export = ast.unparse(function('_export_outputs'))
+        self.assertIn("part_id + '.step'", pair)
+        self.assertIn("part_id + '.stl'", pair)
+        self.assertNotIn('design.rootComponent', export)
+        self.assertNotIn('createFusionArchiveExportOptions', export)
+        self.assertIn("FULL_SIZE_PART_IDS['faceplate']", export)
+        self.assertIn("FULL_SIZE_PART_IDS['dock_body']", export)
 
     def test_all_required_pairs_use_signed_centres(self):
         for right, left in (
@@ -96,18 +113,20 @@ class Sprint3StaticGuards(unittest.TestCase):
     def test_manifest_matches_every_generated_stl_name(self):
         manifest = (ROOT / 'manufacturing/HALO_Dock_Rev_A_External_Print_Candidate/PART_MANIFEST.md').read_text()
         expected = {
-            'HALO_Dock_Rev_A_Clearance_0_2mm.stl',
-            'HALO_Dock_Rev_A_Clearance_0_3mm.stl',
-            'HALO_Dock_Rev_A_Clearance_0_4mm.stl',
-            'HALO_Dock_Rev_A_Faceplate_Open_Corner_L.stl',
-            'HALO_Dock_Rev_A_Side_Guide_Lower_Shelf.stl',
-            'HALO_Dock_Rev_A_Wall_Stack_Shadow_Gap.stl',
-            'HALO_Dock_Rev_A_Faceplate_PRINT_CANDIDATE_ONLY.stl',
-            'HALO_Dock_Rev_A_DockBody_PRINT_CANDIDATE_ONLY.stl',
+            'HALO_Dock_Rev_A_Clearance_0_2mm',
+            'HALO_Dock_Rev_A_Clearance_0_3mm',
+            'HALO_Dock_Rev_A_Clearance_0_4mm',
+            'HALO_Dock_Rev_A_Faceplate_Open_Corner_L',
+            'HALO_Dock_Rev_A_Side_Guide_Lower_Shelf',
+            'HALO_Dock_Rev_A_Wall_Stack_Shadow_Gap_Right',
+            'HALO_Dock_Rev_A_Wall_Stack_Shadow_Gap_Left',
+            'HALO_Dock_Rev_A_Faceplate_PRINT_CANDIDATE_ONLY',
+            'HALO_Dock_Rev_A_DockBody_PRINT_CANDIDATE_ONLY',
         }
         for name in expected:
             self.assertIn(name, SOURCE)
-            self.assertIn(name, manifest)
+            self.assertIn(name + '.step', manifest)
+            self.assertIn(name + '.stl', manifest)
 
 
 if __name__ == '__main__':

@@ -4,9 +4,9 @@
 
 ## Export modes
 
-`EXPORT_MODE` defaults to `COUPONS_ONLY` and writes only coupon STL files to `~/Documents/HALO_Dock_Rev_A/coupons/`. It never exports full Faceplate/DockBody meshes or assembly F3D/STEP/PNG. The 0.2/0.3/0.4 mm clearance gauges, open L corner/lip coupon, and full-pocket-width guide/shelf coupon are included. The wall coupon is included only after a valid physical Dual Lock measurement.
+`EXPORT_MODE` defaults to `COUPONS_ONLY` and writes controlled STEP + STL pairs for coupon parts to `~/Documents/HALO_Dock_Rev_A/coupons/`. It never exports full Faceplate/DockBody meshes or assembly F3D/STEP/PNG. The 0.2/0.3/0.4 mm clearance gauges, open L corner/lip coupon, and full-pocket-width guide/shelf coupon are included. The separately named left and right single-field wall articles are included only after a valid physical Dual Lock measurement; no STL contains loose wall-coupon bodies.
 
-`FULL_SIZE_PRINT_CANDIDATE` writes to `~/Documents/HALO_Dock_Rev_A/print-candidate/`, but only after the measured wall stack and every explicit evidence flag passes. Flags cover native execution, +1 mm rebuild, interference checks, coupon approval, clearance selection, slicer review, and written authorization. Full parts remain `PRINT CANDIDATE ONLY`.
+`FULL_SIZE_PRINT_CANDIDATE` writes to `~/Documents/HALO_Dock_Rev_A/print-candidate/`, but only after the measured wall stack and every explicit evidence flag passes. Flags cover native execution, +1 mm rebuild, interference checks, coupon approval, clearance selection, slicer review, and written authorization. Full parts remain `PRINT CANDIDATE ONLY`. Full mode emits separate component-scoped STEP + STL pairs for Faceplate and DockBody; it never exports the contaminated design root.
 
 ## Measurement blocker
 

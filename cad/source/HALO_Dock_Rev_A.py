@@ -30,13 +30,18 @@ FULL_SIZE_RELEASE_GATES = {
     'slicer_stl_review': False,
     'written_full_size_authorization': False,
 }
-COUPON_FILENAMES = {
-    '0.2': 'HALO_Dock_Rev_A_Clearance_0_2mm.stl',
-    '0.3': 'HALO_Dock_Rev_A_Clearance_0_3mm.stl',
-    '0.4': 'HALO_Dock_Rev_A_Clearance_0_4mm.stl',
-    'corner': 'HALO_Dock_Rev_A_Faceplate_Open_Corner_L.stl',
-    'guide': 'HALO_Dock_Rev_A_Side_Guide_Lower_Shelf.stl',
-    'wall': 'HALO_Dock_Rev_A_Wall_Stack_Shadow_Gap.stl',
+COUPON_PART_IDS = {
+    '0.2': 'HALO_Dock_Rev_A_Clearance_0_2mm',
+    '0.3': 'HALO_Dock_Rev_A_Clearance_0_3mm',
+    '0.4': 'HALO_Dock_Rev_A_Clearance_0_4mm',
+    'corner': 'HALO_Dock_Rev_A_Faceplate_Open_Corner_L',
+    'guide': 'HALO_Dock_Rev_A_Side_Guide_Lower_Shelf',
+    'wall_right': 'HALO_Dock_Rev_A_Wall_Stack_Shadow_Gap_Right',
+    'wall_left': 'HALO_Dock_Rev_A_Wall_Stack_Shadow_Gap_Left',
+}
+FULL_SIZE_PART_IDS = {
+    'faceplate': 'HALO_Dock_Rev_A_Faceplate_PRINT_CANDIDATE_ONLY',
+    'dock_body': 'HALO_Dock_Rev_A_DockBody_PRINT_CANDIDATE_ONLY',
 }
 PARAMETERS = (
     # Captured device envelope.
@@ -834,29 +839,29 @@ def _build_clearance_coupon(design, root, clearance_text):
     return component
 
 
-def _build_wall_coupon(design, root):
+def _build_wall_coupon_field(design, root, side, center_x):
+    """Build one controlled wall-stack test article with exactly one solid."""
     measurement = _dual_lock_measurement(design, required=True)
-    component = _new_component(root, 'Coupon_Wall_Stack_Shadow_Gap')
-    component.description = 'Two discrete measured pad pockets with open 1.5 mm shadow-gap witness area; no continuous spacer.'
-    # Coupon backing is discrete behind each field and leaves the middle/open
-    # perimeter visible. Real Dual Lock pieces bond directly to pocket floors.
-    for side, center_x in (
-        ('Right', 'wall_coupon_center_x'), ('Left', 'wall_coupon_center_x_left')):
-        sketch = component.sketches.add(component.xYConstructionPlane)
-        backing = _extrude(component, _centered_rectangle_profile(
-            sketch, design, 'wall_coupon_backing_width', 'wall_coupon_backing_height',
-            center_x, 'dual_lock_center_y'), '-dock_back_thickness')
-        backing.name = side + ' discrete wall coupon backing field'
-        if measurement[0] > 0:
-            rear_plane = _offset_plane(component, '-dock_back_thickness', side + ' coupon rear plane')
-            pocket_sketch = component.sketches.add(rear_plane)
-            pocket = _extrude(component, _centered_rectangle_profile(
-                pocket_sketch, design, 'dual_lock_pad_width', 'dual_lock_pad_height',
-                center_x, 'dual_lock_center_y'), 'dual_lock_recess_depth',
-                adsk.fusion.FeatureOperations.CutFeatureOperation)
-            pocket.name = side + ' measured recess; bond pad to floor'
-        else:
-            backing.name += ' - zero recess; pad bonds to rear face'
+    component = _new_component(root, 'Coupon_Wall_Stack_Shadow_Gap_' + side)
+    component.description = (
+        side + ' single-field wall-stack article; separately exported so no '
+        'loose bodies or uncontrolled relative spacing enter one vendor file.')
+    sketch = component.sketches.add(component.xYConstructionPlane)
+    backing = _extrude(component, _centered_rectangle_profile(
+        sketch, design, 'wall_coupon_backing_width', 'wall_coupon_backing_height',
+        center_x, 'dual_lock_center_y'), '-dock_back_thickness')
+    backing.name = side + ' discrete wall coupon backing field'
+    if measurement[0] > 0:
+        rear_plane = _offset_plane(
+            component, '-dock_back_thickness', side + ' coupon rear plane')
+        pocket_sketch = component.sketches.add(rear_plane)
+        pocket = _extrude(component, _centered_rectangle_profile(
+            pocket_sketch, design, 'dual_lock_pad_width', 'dual_lock_pad_height',
+            center_x, 'dual_lock_center_y'), 'dual_lock_recess_depth',
+            adsk.fusion.FeatureOperations.CutFeatureOperation)
+        pocket.name = side + ' measured recess; bond pad to floor'
+    else:
+        backing.name += ' - zero recess; pad bonds to rear face'
     return component
 
 
@@ -869,6 +874,18 @@ def _export_stl(export_manager, component, path):
     options = export_manager.createSTLExportOptions(component, path)
     options.meshRefinement = adsk.fusion.MeshRefinementSettings.MeshRefinementHigh
     export_manager.execute(options)
+
+
+def _export_step(export_manager, component, path):
+    """Export one controlled printable component, never the design root."""
+    options = export_manager.createSTEPExportOptions(path, component)
+    export_manager.execute(options)
+
+
+def _export_printable_part(export_manager, component, output_dir, part_id):
+    """Keep vendor STEP/STL names and component scope in one fail-safe path."""
+    _export_step(export_manager, component, os.path.join(output_dir, part_id + '.step'))
+    _export_stl(export_manager, component, os.path.join(output_dir, part_id + '.stl'))
 
 
 def _validate_full_size_release(design):
@@ -889,24 +906,21 @@ def _export_outputs(design, coupons, faceplate, dock_body):
     os.makedirs(output_dir, exist_ok=True)
     export_manager = design.exportManager
     if EXPORT_MODE == COUPONS_ONLY:
-        # Deliberately no Faceplate/DockBody archive, STEP, STL, or screenshot.
-        for component, filename in coupons:
-            _export_stl(export_manager, component, os.path.join(output_dir, filename))
+        # Each tuple is one printable component and one controlled Part ID.
+        # Full parts and root/reference geometry are absent from this list.
+        for component, part_id in coupons:
+            _export_printable_part(export_manager, component, output_dir, part_id)
     else:
         _validate_full_size_release(design)
-        basename = 'HALO_Dock_Rev_A_Print_Candidate'
-        export_manager.execute(export_manager.createFusionArchiveExportOptions(
-            os.path.join(output_dir, basename + '.f3d')))
-        export_manager.execute(export_manager.createSTEPExportOptions(
-            os.path.join(output_dir, basename + '.step'), design.rootComponent))
-        _export_stl(export_manager, faceplate, os.path.join(
-            output_dir, 'HALO_Dock_Rev_A_Faceplate_PRINT_CANDIDATE_ONLY.stl'))
-        _export_stl(export_manager, dock_body, os.path.join(
-            output_dir, 'HALO_Dock_Rev_A_DockBody_PRINT_CANDIDATE_ONLY.stl'))
-        viewport = APP.activeViewport
-        viewport.fit()
-        viewport.refresh()
-        viewport.saveAsImageFile(os.path.join(output_dir, basename + '.png'), 1920, 1080)
+        # There is intentionally no root-component STEP/F3D export. The design
+        # root contains TabletEnvelope, coupons, WallInterface references, and
+        # Assembly placeholder content that is prohibited in vendor output.
+        authorized_parts = (
+            (faceplate, FULL_SIZE_PART_IDS['faceplate']),
+            (dock_body, FULL_SIZE_PART_IDS['dock_body']),
+        )
+        for component, part_id in authorized_parts:
+            _export_printable_part(export_manager, component, output_dir, part_id)
     return output_dir
 
 
@@ -928,14 +942,20 @@ def run(context):
         coupons = []
         for clearance in ('0.2', '0.3', '0.4'):
             coupons.append((_build_clearance_coupon(design, root, clearance),
-                COUPON_FILENAMES[clearance]))
+                COUPON_PART_IDS[clearance]))
         coupons.append((_build_faceplate_corner_coupon(design, root),
-            COUPON_FILENAMES['corner']))
+            COUPON_PART_IDS['corner']))
         coupons.append((_build_guide_shelf_coupon(design, root),
-            COUPON_FILENAMES['guide']))
+            COUPON_PART_IDS['guide']))
         if _dual_lock_measurement(design, required=False):
-            coupons.append((_build_wall_coupon(design, root),
-                COUPON_FILENAMES['wall']))
+            coupons.extend((
+                (_build_wall_coupon_field(
+                    design, root, 'Right', 'wall_coupon_center_x'),
+                 COUPON_PART_IDS['wall_right']),
+                (_build_wall_coupon_field(
+                    design, root, 'Left', 'wall_coupon_center_x_left'),
+                 COUPON_PART_IDS['wall_left']),
+            ))
         output_dir = _export_outputs(design, coupons, faceplate, dock_body)
         if UI:
             message = 'HALO Dock Rev A generated in ' + EXPORT_MODE + ' mode and exported to:\n' + output_dir

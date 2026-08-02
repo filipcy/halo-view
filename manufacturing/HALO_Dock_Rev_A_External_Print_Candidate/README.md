@@ -2,9 +2,9 @@
 
 **Release state: NOT READY FOR EXTERNAL PRINT. Full-size printing is prohibited until coupon approval and separate written authorization.**
 
-The generator defaults to `COUPONS_ONLY`. It produces five currently eligible coupon meshes (three clearance gauges, an open L Faceplate corner, and a full-width guide/shelf test) under `~/Documents/HALO_Dock_Rev_A/coupons/`. The wall-stack coupon is conditionally omitted because the exact selected Dual Lock pair has not been measured.
+The generator defaults to `COUPONS_ONLY`. It produces five currently eligible coupon Part IDs as matched STEP + STL pairs (three clearance gauges, an open L Faceplate corner, and a full-width guide/shelf test) under `~/Documents/HALO_Dock_Rev_A/coupons/`. The separately named left/right single-field wall articles are conditionally omitted because the exact selected Dual Lock pair has not been measured.
 
-`FULL_SIZE_PRINT_CANDIDATE` is a consciously selected, fail-closed mode. It requires native Fusion execution, a 125→126 mm width and 211→212 mm height rebuild, interference/path checks, coupon approval, selected clearance, physical Dual Lock measurement, slicer review, and written full-size authorization. Its output is isolated under `~/Documents/HALO_Dock_Rev_A/print-candidate/`.
+`FULL_SIZE_PRINT_CANDIDATE` is a consciously selected, fail-closed mode. It requires native Fusion execution, a 125→126 mm width and 211→212 mm height rebuild, interference/path checks, coupon approval, selected clearance, physical Dual Lock measurement, slicer review, and written full-size authorization. Its output is isolated under `~/Documents/HALO_Dock_Rev_A/print-candidate/` as separate Faceplate and DockBody STEP + STL pairs. No root-design STEP is exported because reference and coupon components must not contaminate vendor geometry.
 
 **BLOCKED — exact Dual Lock pair must be selected and measured before print release.** `0 mm` explicitly means not measured. The intended design retains a 1.5 mm visible open shadow gap and pockets only measured excess thickness into two symmetric, discrete DockBody recesses. Dual Lock bonds to the pocket floors so the load path is wall → Dual Lock → DockBody; no full-area spacer may fill the gap.
 
