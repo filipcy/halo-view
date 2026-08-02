@@ -188,6 +188,38 @@ class Sprint3StaticGuards(unittest.TestCase):
         self.assertIn("'cable_pocket_corner_radius'", cutter)
         self.assertIn('_centered_rounded_rectangle_profile', cutter)
 
+    def test_rounded_cable_profile_is_fully_constrained_and_placed(self):
+        rounded = ast.unparse(function('_centered_rounded_rectangle_profile'))
+        self.assertIn('_set_dimension_expression(width_dimension, width_name)', rounded)
+        self.assertIn('_set_dimension_expression(height_dimension, height_name)', rounded)
+        self.assertIn("f'abs(({center_x}) - ({width_name}) / 2)'", rounded)
+        self.assertIn("f'abs(({center_y}) - ({height_name}) / 2)'", rounded)
+        self.assertEqual(rounded.count('constraints.addHorizontal'), 2)
+        self.assertEqual(rounded.count('constraints.addVertical'), 2)
+        self.assertIn('constraints.addTangent(line, arc)', rounded)
+        self.assertIn('quarter_turn = 3.141592653589793 / 2', rounded)
+        self.assertNotIn('-quarter_turn', rounded)
+        self.assertIn('sketch.profiles.count != 1', rounded)
+        for endpoints in (
+            'top_left.startSketchPoint, top_right.endSketchPoint',
+            'bottom_right.endSketchPoint, top_right.startSketchPoint',
+            'bottom_left.endSketchPoint, bottom_right.startSketchPoint',
+            'bottom_left.startSketchPoint, top_left.endSketchPoint',
+        ):
+            self.assertIn(endpoints, rounded)
+
+    def test_cable_envelope_failure_reports_world_axis_diagnostics(self):
+        guard = ast.unparse(function('_validate_cable_envelope_clear'))
+        self.assertIn("_mm(design, 'cable_pocket_width')", guard)
+        self.assertIn("_mm(design, 'cable_pocket_run_depth')", guard)
+        self.assertIn("_mm(design, 'cable_pocket_height')", guard)
+        self.assertIn('> 0.01', guard)
+        for diagnostic in (
+            'Expected X/Y/Z (mm)', 'actual X/Y/Z (mm)',
+            'min X/Y/Z (mm)', 'max X/Y/Z (mm)',
+        ):
+            self.assertIn(diagnostic, guard)
+
     def test_cable_envelope_is_reference_only_and_export_guarded(self):
         envelope = ast.unparse(function('_build_cable_envelope'))
         self.assertIn("_new_component(root, 'CableEnvelope')", envelope)

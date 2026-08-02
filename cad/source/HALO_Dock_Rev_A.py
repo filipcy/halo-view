@@ -379,42 +379,77 @@ def _centered_rounded_rectangle_profile(
         raise RuntimeError('Rounded profile radius must be positive and smaller than half each side.')
     left, right = cx - width / 2, cx + width / 2
     bottom, top = cy - height / 2, cy + height / 2
-    lines = sketch.sketchCurves.sketchLines
     arcs = sketch.sketchCurves.sketchArcs
-    top_line = lines.addByTwoPoints(
-        adsk.core.Point3D.create(left + radius, top, 0),
-        adsk.core.Point3D.create(right - radius, top, 0))
-    right_line = lines.addByTwoPoints(
-        adsk.core.Point3D.create(right, bottom + radius, 0),
-        adsk.core.Point3D.create(right, top - radius, 0))
-    bottom_line = lines.addByTwoPoints(
-        adsk.core.Point3D.create(left + radius, bottom, 0),
-        adsk.core.Point3D.create(right - radius, bottom, 0))
-    left_line = lines.addByTwoPoints(
-        adsk.core.Point3D.create(left, bottom + radius, 0),
-        adsk.core.Point3D.create(left, top - radius, 0))
     quarter_turn = 3.141592653589793 / 2
-    corner_arcs = (
-        arcs.addByCenterStartSweep(
-            adsk.core.Point3D.create(right - radius, top - radius, 0),
-            right_line.endSketchPoint, quarter_turn),
-        arcs.addByCenterStartSweep(
-            adsk.core.Point3D.create(left + radius, top - radius, 0),
-            top_line.startSketchPoint, quarter_turn),
-        arcs.addByCenterStartSweep(
-            adsk.core.Point3D.create(left + radius, bottom + radius, 0),
-            left_line.startSketchPoint, quarter_turn),
-        arcs.addByCenterStartSweep(
-            adsk.core.Point3D.create(right - radius, bottom + radius, 0),
-            bottom_line.endSketchPoint, quarter_turn),
-    )
+    # Create arcs first. Positive sweeps preserve these controlled endpoint
+    # semantics in native Fusion: right->top, top->left, left->bottom,
+    # bottom->right. Lines then reuse the returned SketchPoint objects.
+    top_right = arcs.addByCenterStartSweep(
+        adsk.core.Point3D.create(right - radius, top - radius, 0),
+        adsk.core.Point3D.create(right, top - radius, 0), quarter_turn)
+    top_left = arcs.addByCenterStartSweep(
+        adsk.core.Point3D.create(left + radius, top - radius, 0),
+        adsk.core.Point3D.create(left + radius, top, 0), quarter_turn)
+    bottom_left = arcs.addByCenterStartSweep(
+        adsk.core.Point3D.create(left + radius, bottom + radius, 0),
+        adsk.core.Point3D.create(left, bottom + radius, 0), quarter_turn)
+    bottom_right = arcs.addByCenterStartSweep(
+        adsk.core.Point3D.create(right - radius, bottom + radius, 0),
+        adsk.core.Point3D.create(right - radius, bottom, 0), quarter_turn)
+    corner_arcs = (top_right, top_left, bottom_left, bottom_right)
+
+    lines = sketch.sketchCurves.sketchLines
+    top_line = lines.addByTwoPoints(
+        top_left.startSketchPoint, top_right.endSketchPoint)
+    right_line = lines.addByTwoPoints(
+        bottom_right.endSketchPoint, top_right.startSketchPoint)
+    bottom_line = lines.addByTwoPoints(
+        bottom_left.endSketchPoint, bottom_right.startSketchPoint)
+    left_line = lines.addByTwoPoints(
+        bottom_left.startSketchPoint, top_left.endSketchPoint)
+
+    constraints = sketch.geometricConstraints
+    constraints.addHorizontal(top_line)
+    constraints.addHorizontal(bottom_line)
+    constraints.addVertical(left_line)
+    constraints.addVertical(right_line)
+    for line, arc in (
+        (top_line, top_left), (top_line, top_right),
+        (right_line, bottom_right), (right_line, top_right),
+        (bottom_line, bottom_left), (bottom_line, bottom_right),
+        (left_line, bottom_left), (left_line, top_left),
+    ):
+        constraints.addTangent(line, arc)
+
     dimensions = sketch.sketchDimensions
+    horizontal = adsk.fusion.DimensionOrientations.HorizontalDimensionOrientation
+    vertical = adsk.fusion.DimensionOrientations.VerticalDimensionOrientation
+    width_dimension = dimensions.addDistanceDimension(
+        top_left.endSketchPoint, top_right.startSketchPoint, horizontal,
+        adsk.core.Point3D.create(cx, top + radius, 0))
+    _set_dimension_expression(width_dimension, width_name)
+    height_dimension = dimensions.addDistanceDimension(
+        bottom_left.endSketchPoint, top_left.startSketchPoint, vertical,
+        adsk.core.Point3D.create(left - radius, cy, 0))
+    _set_dimension_expression(height_dimension, height_name)
+
+    # Distance dimensions are unsigned. Initial left/bottom quadrants preserve
+    # direction while abs() supplies valid edge-derived placement expressions.
+    x_dimension = dimensions.addDistanceDimension(
+        sketch.originPoint, bottom_left.startSketchPoint, horizontal,
+        adsk.core.Point3D.create(left / 2, bottom, 0))
+    y_dimension = dimensions.addDistanceDimension(
+        sketch.originPoint, bottom_left.endSketchPoint, vertical,
+        adsk.core.Point3D.create(left, bottom / 2, 0))
+    _set_dimension_expression(
+        x_dimension, f'abs(({center_x}) - ({width_name}) / 2)')
+    _set_dimension_expression(
+        y_dimension, f'abs(({center_y}) - ({height_name}) / 2)')
+
     for arc in corner_arcs:
         radial = dimensions.addRadialDimension(
             arc, adsk.core.Point3D.create(cx, cy, 0))
         _set_dimension_expression(radial, radius_name)
-    # Width/height and edge-derived centres seed the deterministic profile on
-    # every generator run; radius remains a live, controlled CAD expression.
     if sketch.profiles.count != 1:
         raise RuntimeError('Rounded cable profile must resolve to exactly one closed profile.')
     return sketch.profiles.item(0)
@@ -644,7 +679,7 @@ def _cut_cable_profile(component, design, plane, center_y, distance, name):
     return cut
 
 
-def _validate_cable_envelope_clear(cable_envelope, printable_components):
+def _validate_cable_envelope_clear(design, cable_envelope, printable_components):
     """Use native BRep intersections to block export if any cable clash remains."""
     manager = adsk.fusion.TemporaryBRepManager.get()
     envelope_body = cable_envelope.bRepBodies.item(0)
@@ -654,10 +689,22 @@ def _validate_cable_envelope_clear(cable_envelope, printable_components):
         bounds.maxPoint.y - bounds.minPoint.y,
         bounds.maxPoint.z - bounds.minPoint.z,
     )
-    expected = (1.8, 2.0, 0.8)  # Fusion internal centimetres: 18 x 20 x 8 mm.
+    expected = (
+        _mm(design, 'cable_pocket_width'),
+        _mm(design, 'cable_pocket_run_depth'),
+        _mm(design, 'cable_pocket_height'),
+    )
     if any(abs(value - target) > 0.01 for value, target in zip(actual, expected)):
         raise RuntimeError(
-            'CableEnvelope must remain the controlled 18 x 8 x 20 mm clear volume.')
+            'CableEnvelope world-axis extents are outside the 0.1 mm tolerance. '
+            'Expected X/Y/Z (mm): {:.3f}, {:.3f}, {:.3f}; actual X/Y/Z '
+            '(mm): {:.3f}, {:.3f}, {:.3f}; min X/Y/Z (mm): {:.3f}, '
+            '{:.3f}, {:.3f}; max X/Y/Z (mm): {:.3f}, {:.3f}, {:.3f}.'.format(
+                expected[0] * 10, expected[1] * 10, expected[2] * 10,
+                actual[0] * 10, actual[1] * 10, actual[2] * 10,
+                bounds.minPoint.x * 10, bounds.minPoint.y * 10,
+                bounds.minPoint.z * 10, bounds.maxPoint.x * 10,
+                bounds.maxPoint.y * 10, bounds.maxPoint.z * 10))
     for component in printable_components:
         for index in range(component.bRepBodies.count):
             intersection = manager.copy(envelope_body)
@@ -1248,7 +1295,8 @@ def _export_outputs(design, coupons, faceplate, dock_body, cable_envelope):
         root_dir, 'coupons' if EXPORT_MODE == COUPONS_ONLY else 'print-candidate')
     os.makedirs(output_dir, exist_ok=True)
     export_manager = design.exportManager
-    _validate_cable_envelope_clear(cable_envelope, (faceplate, dock_body))
+    _validate_cable_envelope_clear(
+        design, cable_envelope, (faceplate, dock_body))
     if EXPORT_MODE == COUPONS_ONLY:
         # Each tuple is one printable component and one controlled Part ID.
         # Full parts and root/reference geometry are absent from this list.
