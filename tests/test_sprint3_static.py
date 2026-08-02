@@ -170,7 +170,7 @@ class Sprint3StaticGuards(unittest.TestCase):
             self.assertIn(expression, SOURCE)
         dock = ast.unparse(function('_build_dock_body'))
         for feature in ('camera_keepout_depth', 'button_relief_depth',
-                        'cable_pocket_center_y', 'speaker_slot_width'):
+                        'cable_pocket_center_y', '_cut_speaker_slot'):
             self.assertIn(feature, dock)
         validate = ast.unparse(function('_validate_iteration_2_geometry'))
         for message in ('Camera Keep-out', 'Button Relief', 'Cable Pocket', 'Speaker slot'):
@@ -208,12 +208,32 @@ class Sprint3StaticGuards(unittest.TestCase):
         self.assertIn('_cut_cable_profile', faceplate)
         self.assertGreaterEqual(dock.count('_cut_cable_profile'), 2)
         self.assertIn('_cut_cable_profile', guide)
-        self.assertIn('speaker_slot_width', guide)
+        self.assertIn('_cut_speaker_slot', guide)
         self.assertIn('_cut_cable_profile', cable_coupon)
         self.assertIn('component.bRepBodies.count != 1', cable_coupon)
         self.assertIn(
             'HALO_Dock_Rev_A_Faceplate_USB_C_Cable_Pocket',
             assignment('COUPON_PART_IDS').values())
+
+    def test_speaker_slot_is_shared_xz_through_cut(self):
+        speaker = ast.unparse(function('_cut_speaker_slot'))
+        self.assertIn('component.xZConstructionPlane', ast.unparse(function('_offset_xz_plane')))
+        self.assertIn("'speaker_slot_width', 'speaker_slot_height'", speaker)
+        self.assertIn("'speaker_slot_center_x', 'speaker_slot_center_z'", speaker)
+        self.assertIn("profile, 'lower_support_thickness'", speaker)
+        self.assertNotIn("profile, 'speaker_slot_height'", speaker)
+        self.assertIn('height > _mm(design, \'guide_depth\')', speaker)
+        self.assertIn('shelf_wall <= 0', speaker)
+        self.assertIn('abs(width - 2.0)', speaker)
+        self.assertIn('abs(height - 0.5)', speaker)
+        self.assertIn('cut.extentOne.distance.value - shelf_wall', speaker)
+        self.assertIn('residual shelf material would block', speaker)
+        dock = ast.unparse(function('_build_dock_body'))
+        guide = ast.unparse(function('_build_guide_shelf_coupon'))
+        self.assertEqual(dock.count('_cut_speaker_slot'), 1)
+        self.assertEqual(guide.count('_cut_speaker_slot'), 1)
+        self.assertIn("'speaker_slot_plane_offset'", dock)
+        self.assertIn("'coupon_speaker_slot_plane_offset'", guide)
 
     def test_dual_lock_is_measurement_gated(self):
         self.assertNotIn('dual_lock_engaged_thickness', SOURCE)

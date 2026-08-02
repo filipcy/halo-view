@@ -145,6 +145,9 @@ PARAMETERS = (
     ('speaker_slot_center_y', 'shelf_center_y', 'Keep-outs', 'Speaker slot contained in lower shelf'),
     ('speaker_slot_width', '20 mm', 'Keep-outs', 'Single lower-speaker opening width'),
     ('speaker_slot_height', '5 mm', 'Keep-outs', 'Acoustic opening height through shelf depth'),
+    ('speaker_slot_center_z', 'speaker_slot_height / 2', 'Keep-outs', 'XZ slot centre opens from shelf rear datum'),
+    ('speaker_slot_plane_offset', '-shelf_center_y - lower_support_thickness / 2', 'Keep-outs', 'Positive XZ-plane offset locates the shelf outer Y face'),
+    ('coupon_speaker_slot_plane_offset', '-coupon_shelf_center_y - lower_support_thickness / 2', 'Coupons', 'Positive XZ-plane offset locates the coupon shelf outer Y face'),
     ('coupon_cable_center_y', '-coupon_guide_length / 2 - cable_pocket_run_depth / 2', 'Coupons', 'Open-air cable envelope below shortened guide coupon edge'),
     ('faceplate_cable_coupon_width', '52 mm', 'Coupons', 'Connected bottom-centre Faceplate cable test span'),
     ('faceplate_cable_coupon_band_height', 'bezel_width + inner_lip_overlap', 'Coupons', 'Real visible-lip bottom band height'),
@@ -547,6 +550,49 @@ def _offset_plane(component, expression, name):
     return plane
 
 
+def _offset_xz_plane(component, expression, name):
+    """Offset from XZ; its positive normal points toward negative model Y."""
+    plane_input = component.constructionPlanes.createInput()
+    plane_input.setByOffset(
+        component.xZConstructionPlane,
+        adsk.core.ValueInput.createByString(expression),
+    )
+    plane = component.constructionPlanes.add(plane_input)
+    plane.name = name
+    return plane
+
+
+def _cut_speaker_slot(component, design, plane_offset, name):
+    """Cut the controlled 20 x 5 mm XZ opening through the full shelf Y wall."""
+    width = _mm(design, 'speaker_slot_width')
+    height = _mm(design, 'speaker_slot_height')
+    shelf_wall = _mm(design, 'lower_support_thickness')
+    if abs(width - 2.0) > 1e-6 or abs(height - 0.5) > 1e-6:
+        raise RuntimeError('Speaker slot XZ profile must remain exactly 20 x 5 mm.')
+    if width <= 0 or height <= 0 or height > _mm(design, 'guide_depth'):
+        raise RuntimeError('Speaker slot must be a positive XZ opening contained in shelf depth.')
+    if shelf_wall <= 0:
+        raise RuntimeError('Speaker slot through-cut requires positive lower_support_thickness.')
+    plane = _offset_xz_plane(component, plane_offset, name + ' outer Y face')
+    sketch = component.sketches.add(plane)
+    sketch.name = name + ' 20 x 5 mm XZ profile'
+    profile = _centered_rectangle_profile(
+        sketch, design, 'speaker_slot_width', 'speaker_slot_height',
+        'speaker_slot_center_x', 'speaker_slot_center_z')
+    cut = _extrude(
+        component, profile, 'lower_support_thickness',
+        adsk.fusion.FeatureOperations.CutFeatureOperation)
+    cut.name = name + ' through complete shelf Y thickness'
+    if abs(cut.extentOne.distance.value - shelf_wall) > 1e-6:
+        raise RuntimeError(
+            'Speaker slot cut must traverse all of lower_support_thickness; '
+            'residual shelf material would block the opening.')
+    # A successful CutFeature over exactly the shelf-wall parameter leaves no
+    # residual shelf thickness in this 20 x 5 mm XZ opening. Fusion raises if
+    # the profile misses the shelf or the requested cut cannot be constructed.
+    return cut
+
+
 def _build_tablet_envelope(design, root):
     component = _new_component(root, 'TabletEnvelope')
     sketch = component.sketches.add(component.xYConstructionPlane)
@@ -840,18 +886,9 @@ def _build_dock_body(design, root):
     shelf.name = 'Lower support shelf'
     shelf.bodies.item(0).name = 'Lower tablet support shelf'
 
-    speaker_sketch = component.sketches.add(component.xYConstructionPlane)
-    speaker_sketch.name = 'Single lower speaker slot footprint'
-    speaker_slot = _extrude(
-        component,
-        _centered_rectangle_profile(
-            speaker_sketch, design, 'speaker_slot_width',
-            'lower_support_thickness', 'speaker_slot_center_x',
-            'speaker_slot_center_y'),
-        'speaker_slot_height',
-        adsk.fusion.FeatureOperations.CutFeatureOperation,
-    )
-    speaker_slot.name = 'One simple lower-speaker opening - no grille'
+    _cut_speaker_slot(
+        component, design, 'speaker_slot_plane_offset',
+        'One simple lower-speaker opening - no grille')
 
     _cut_cable_profile(
         component, design, component.xYConstructionPlane,
@@ -1056,14 +1093,9 @@ def _build_guide_shelf_coupon(design, root):
         component, design, component.xYConstructionPlane,
         'coupon_cable_center_y', 'cable_pocket_height',
         'Guide coupon USB-C cable clearance')
-    speaker_sketch = component.sketches.add(component.xYConstructionPlane)
-    speaker = _extrude(
-        component, _centered_rectangle_profile(
-            speaker_sketch, design, 'speaker_slot_width',
-            'lower_support_thickness', 'speaker_slot_center_x',
-            'coupon_shelf_center_y'),
-        'speaker_slot_height', adsk.fusion.FeatureOperations.CutFeatureOperation)
-    speaker.name = 'Guide coupon single lower-speaker opening'
+    _cut_speaker_slot(
+        component, design, 'coupon_speaker_slot_plane_offset',
+        'Guide coupon single lower-speaker opening')
     return component
 
 
