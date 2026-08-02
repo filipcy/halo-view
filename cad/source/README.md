@@ -1,33 +1,15 @@
 # HALO Dock Rev A source
 
-`HALO_Dock_Rev_A.py` is a Fusion 360 Python generator for the portrait Samsung Galaxy Tab A11 SM-X130 dock. Run it from **Utilities → Add-Ins → Scripts and Add-Ins** in an open, empty Fusion Design.
+`HALO_Dock_Rev_A.py` is the native Fusion 360 parametric source generator. Sprint 3 retains accepted Iteration 2 full-part geometry and adds test coupons, measured Dual Lock recess logic, and gated exports. Static Python checks are not native CAD validation.
 
-The generator creates named user parameters and separate components so prototype assumptions remain editable. Values marked `Reserved` or `Keep-outs` document interfaces that still do not create geometry.
+## Export modes
 
-## Iteration 2 scope
+`EXPORT_MODE` defaults to `COUPONS_ONLY` and writes only coupon STL files to `~/Documents/HALO_Dock_Rev_A/coupons/`. It never exports full Faceplate/DockBody meshes or assembly F3D/STEP/PNG. The 0.2/0.3/0.4 mm clearance gauges, open L corner/lip coupon, and full-pocket-width guide/shelf coupon are included. The wall coupon is included only after a valid physical Dual Lock measurement.
 
-The model now contains:
+`FULL_SIZE_PRINT_CANDIDATE` writes to `~/Documents/HALO_Dock_Rev_A/print-candidate/`, but only after the measured wall stack and every explicit evidence flag passes. Flags cover native execution, +1 mm rebuild, interference checks, coupon approval, clearance selection, slicer review, and written authorization. Full parts remain `PRINT CANDIDATE ONLY`.
 
-- `TabletEnvelope`, a non-manufacturing reference body;
-- `Faceplate`, the visible front lip plus rear perimeter skirt; and
-- `DockBody`, with its projection-controlled backing, paired side guides, lower support shelf, and explicitly non-final paired upper side-detent concept; and
-- `WallInterface`, with two hidden flat 3M Dual Lock mounting-field bodies spanning the physical shadow gap.
+## Measurement blocker
 
-`Assembly` remains a named placeholder. The portrait top has no crossbar and the guides stop below it, preserving a fully open insertion path. USB routing, a final latch, and final fillets/chamfers or cosmetic finishing are explicitly deferred.
+`dual_lock_measured_engaged_thickness` defaults to `0 mm`, meaning **NOT MEASURED**. It is labeled `REQUIRED PHYSICAL MEASUREMENT — exact selected Dual Lock pair`. Do not substitute a catalog claim or estimate. The wall coupon and all full-size exports remain blocked until the exact selected, mated pair is measured and the derived recess leaves positive structural backing.
 
-The Faceplate component intentionally contains separate front-lip and rear-skirt solids. The lip preserves the 0.8 mm screen recess in front of the tablet display plane, while the skirt provides the remaining prototype structural depth only outside the tablet envelope.
-
-The wall datum and flat mounting fields realize `wall_shadow_gap` as a nominal 1.5 mm separation. The generator checks `wall_shadow_gap + dock_back_thickness + device_thickness + screen_recess` against `total_projection_target`; current values produce 18.0 mm. New feature sizes and locations are user parameters or expressions derived from them, and nominal guide, shelf, and retention-concept boundaries remain outside `TabletEnvelope`.
-
-## Output
-
-When generation completes inside Fusion 360, the export hook writes F3D, STEP, STL, and PNG deliverables to `~/Documents/HALO_Dock_Rev_A_Iteration_2/`. The hook creates the directory automatically and replaces existing files with the same names. Two print meshes are written, one each for the Faceplate and DockBody. WallInterface mounting fields remain review geometry in the assembly export rather than a released print mesh.
-
-## Prototype printing assumption
-
-- Print the **Faceplate front face down** on a clean, smooth build plate.
-- Print the **DockBody wall-side face down**.
-- Support-free printing is an **unverified prototype assumption** now that guides, shelf, and retention studies are present.
-- The tablet envelope and placeholder components are not printable release parts.
-
-This orientation/support guidance is provisional. No full-size print is released until physical fit, open insertion, active-display overlap, cable envelope, retention, mounting interface, shadow gap, and installed projection are validated. If Fusion 360 is unavailable, native execution, rebuild testing, interference checks, and generated exports remain unverified.
+Follow `cad/reviews/HALO_Dock_Rev_A_Sprint_3.md`. No Fusion execution, export, slicer review, or physical validation was performed in this repository environment.
