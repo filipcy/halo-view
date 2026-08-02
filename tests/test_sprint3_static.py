@@ -94,7 +94,41 @@ class Sprint3StaticGuards(unittest.TestCase):
         self.assertIn('coupon_corner_arm_length', profile)
         self.assertIn('addByCenterStartSweep', profile)
         self.assertEqual(profile.count('addByCenterStartSweep'), 2)
-        self.assertNotIn('lines.addByTwoPoints(outer_arc.endSketchPoint', profile)
+        self.assertNotIn('top_arm_datum', profile)
+        self.assertNotIn('side_arm_datum', profile)
+        self.assertNotIn('isConstruction', profile)
+        self.assertIn(
+            'sketch.originPoint, outer_top.startSketchPoint', profile)
+        self.assertIn(
+            'sketch.originPoint, outer_side.endSketchPoint', profile)
+        self.assertEqual(profile.count("'coupon_corner_arm_length'"), 3)
+        self.assertNotIn('-3.141592653589793 / 2', profile)
+        self.assertIn(
+            "Point3D.create(-arm, 0, 0), outer_arc.endSketchPoint", profile)
+        self.assertIn(
+            'outer_arc.startSketchPoint, adsk.core.Point3D.create(0, -arm, 0)',
+            profile)
+        self.assertIn(
+            'side_end.endSketchPoint, inner_arc.startSketchPoint', profile)
+        self.assertIn(
+            'inner_arc.endSketchPoint, adsk.core.Point3D.create(-arm, -band, 0)',
+            profile)
+        self.assertNotIn('constraints.addCoincident', profile)
+        self.assertNotIn('addVertical(outer_side)', profile)
+        self.assertNotIn('addVertical(inner_side)', profile)
+        self.assertNotIn('coupon_corner_outer_width', profile)
+        self.assertNotIn('coupon_corner_outer_height', profile)
+
+    def test_open_corner_skirt_joins_and_native_export_is_guarded(self):
+        corner = ast.unparse(function('_build_faceplate_corner_coupon'))
+        guard = ast.unparse(function('_validate_open_corner_coupon'))
+        export = ast.unparse(function('_export_outputs'))
+        self.assertIn('JoinFeatureOperation', corner)
+        self.assertIn('component.bRepBodies.count != 1', guard)
+        self.assertIn("_mm(design, 'coupon_corner_arm_length')", guard)
+        self.assertIn('bounds.maxPoint.x - bounds.minPoint.x', guard)
+        self.assertIn('bounds.maxPoint.y - bounds.minPoint.y', guard)
+        self.assertIn('_validate_open_corner_coupon(component, design)', export)
 
     def test_dual_lock_is_measurement_gated(self):
         self.assertNotIn('dual_lock_engaged_thickness', SOURCE)
