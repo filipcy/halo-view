@@ -45,6 +45,7 @@ PARAMETERS = (
     ('retention_center_x', 'device_width / 2 + retention_concept_width / 2', 'Dock', 'Non-final detent reaches the TabletEnvelope boundary without crossing it'),
     ('retention_center_x_left', '-retention_center_x', 'Dock', 'Left non-final detent centre'),
     ('retention_center_y', 'device_height / 2 - retention_concept_height / 2', 'Dock', 'Non-final side detent location below the open top'),
+    ('dock_center_x', '0 mm', 'Dock', 'Shared horizontal centre datum for DockBody features'),
     # Iteration 2 mounting interface; adhesive thickness remains a prototype assumption.
     ('dual_lock_pad_width', '25 mm', 'Wall interface', 'Flat hidden mounting field width'),
     ('dual_lock_pad_height', '50 mm', 'Wall interface', 'Flat hidden mounting field height'),
@@ -193,12 +194,21 @@ def _extrude(component, profile, distance_expression, operation=adsk.fusion.Feat
     return extrudes.add(feature_input)
 
 
-def _centered_rectangle_profile(sketch, design, width_name, height_name, center_x, center_y):
+def _centered_rectangle_profile(
+    sketch,
+    design,
+    width_name,
+    height_name,
+    center_x,
+    center_y,
+):
     """Create a parameter-dimensioned rectangle, centred on expression datums."""
     width = _mm(design, width_name)
     height = _mm(design, height_name)
-    cx = _mm(design, center_x) if center_x in [p[0] for p in PARAMETERS] else 0
-    cy = _mm(design, center_y) if center_y in [p[0] for p in PARAMETERS] else 0
+    # Centre datums must be named parameters too; failing loudly prevents a
+    # typo from silently creating fixed, origin-centred geometry.
+    cx = _mm(design, center_x)
+    cy = _mm(design, center_y)
     lines = sketch.sketchCurves.sketchLines.addTwoPointRectangle(
         adsk.core.Point3D.create(cx - width / 2, cy - height / 2, 0),
         adsk.core.Point3D.create(cx + width / 2, cy + height / 2, 0),
@@ -206,11 +216,41 @@ def _centered_rectangle_profile(sketch, design, width_name, height_name, center_
     dims = sketch.sketchDimensions
     horizontal = adsk.fusion.DimensionOrientations.HorizontalDimensionOrientation
     vertical = adsk.fusion.DimensionOrientations.VerticalDimensionOrientation
-    _set_dimension_expression(dims.addDistanceDimension(lines.item(0).startSketchPoint, lines.item(0).endSketchPoint, horizontal, adsk.core.Point3D.create(cx, cy - height, 0)), width_name)
-    _set_dimension_expression(dims.addDistanceDimension(lines.item(1).startSketchPoint, lines.item(1).endSketchPoint, vertical, adsk.core.Point3D.create(cx + width, cy, 0)), height_name)
-    centre = lines.item(0).startSketchPoint
-    x_dim = dims.addDistanceDimension(sketch.originPoint, centre, horizontal, adsk.core.Point3D.create(cx / 2, cy - height, 0))
-    y_dim = dims.addDistanceDimension(sketch.originPoint, centre, vertical, adsk.core.Point3D.create(cx - width, cy / 2, 0))
+    # addTwoPointRectangle returns a Python list in Fusion's Python API, not
+    # an ObjectCollection. Indexing it directly is required during native use.
+    bottom = lines[0]
+    right = lines[1]
+    _set_dimension_expression(
+        dims.addDistanceDimension(
+            bottom.startSketchPoint,
+            bottom.endSketchPoint,
+            horizontal,
+            adsk.core.Point3D.create(cx, cy - height, 0),
+        ),
+        width_name,
+    )
+    _set_dimension_expression(
+        dims.addDistanceDimension(
+            right.startSketchPoint,
+            right.endSketchPoint,
+            vertical,
+            adsk.core.Point3D.create(cx + width, cy, 0),
+        ),
+        height_name,
+    )
+    lower_left = bottom.startSketchPoint
+    x_dim = dims.addDistanceDimension(
+        sketch.originPoint,
+        lower_left,
+        horizontal,
+        adsk.core.Point3D.create(cx / 2, cy - height, 0),
+    )
+    y_dim = dims.addDistanceDimension(
+        sketch.originPoint,
+        lower_left,
+        vertical,
+        adsk.core.Point3D.create(cx - width, cy / 2, 0),
+    )
     # Distance dimensions are unsigned; the initial point quadrant preserves
     # direction while abs() keeps a legal expression on every side.
     _set_dimension_expression(x_dim, f'abs(({center_x}) - ({width_name}) / 2)')
@@ -412,12 +452,22 @@ def _build_dock_body(design, root):
     feature.name = 'Iteration 2 projection-controlled backing'
     feature.bodies.item(0).name = 'HALO DockBody Rev A - backing'
 
-    for side, center_x in (('Right', 'guide_center_x'), ('Left', 'guide_center_x_left')):
+    for side, center_x in (
+        ('Right', 'guide_center_x'),
+        ('Left', 'guide_center_x_left'),
+    ):
         guide_sketch = component.sketches.add(component.xYConstructionPlane)
         guide_sketch.name = side + ' side guide footprint'
         guide = _extrude(
             component,
-            _centered_rectangle_profile(guide_sketch, design, 'dock_side_wall', 'guide_height', center_x, 'guide_center_y'),
+            _centered_rectangle_profile(
+                guide_sketch,
+                design,
+                'dock_side_wall',
+                'guide_height',
+                center_x,
+                'guide_center_y',
+            ),
             'guide_depth',
         )
         guide.name = side + ' side guide - open top'
@@ -427,18 +477,35 @@ def _build_dock_body(design, root):
     shelf_sketch.name = 'Lower support shelf footprint'
     shelf = _extrude(
         component,
-        _centered_rectangle_profile(shelf_sketch, design, 'shelf_width', 'lower_support_thickness', 'dual_lock_center_y', 'shelf_center_y'),
+        _centered_rectangle_profile(
+            shelf_sketch,
+            design,
+            'shelf_width',
+            'lower_support_thickness',
+            'dock_center_x',
+            'shelf_center_y',
+        ),
         'guide_depth',
     )
     shelf.name = 'Lower support shelf'
     shelf.bodies.item(0).name = 'Lower tablet support shelf'
 
-    for side, center_x in (('Right', 'retention_center_x'), ('Left', 'retention_center_x_left')):
+    for side, center_x in (
+        ('Right', 'retention_center_x'),
+        ('Left', 'retention_center_x_left'),
+    ):
         retention_sketch = component.sketches.add(component.xYConstructionPlane)
         retention_sketch.name = side + ' non-final retention concept footprint'
         retention = _extrude(
             component,
-            _centered_rectangle_profile(retention_sketch, design, 'retention_concept_width', 'retention_concept_height', center_x, 'retention_center_y'),
+            _centered_rectangle_profile(
+                retention_sketch,
+                design,
+                'retention_concept_width',
+                'retention_concept_height',
+                center_x,
+                'retention_center_y',
+            ),
             'guide_depth',
         )
         retention.name = side + ' upper side detent concept - NOT FINAL'
@@ -454,12 +521,22 @@ def _build_wall_interface(design, root):
         '-dock_back_thickness - wall_shadow_gap',
         'Wall datum - establishes actual shadow gap',
     )
-    for side, center_x in (('Right', 'dual_lock_center_x'), ('Left', 'dual_lock_center_x_left')):
+    for side, center_x in (
+        ('Right', 'dual_lock_center_x'),
+        ('Left', 'dual_lock_center_x_left'),
+    ):
         sketch = component.sketches.add(wall_plane)
         sketch.name = side + ' hidden Dual Lock field'
         field = _extrude(
             component,
-            _centered_rectangle_profile(sketch, design, 'dual_lock_pad_width', 'dual_lock_pad_height', center_x, 'dual_lock_center_y'),
+            _centered_rectangle_profile(
+                sketch,
+                design,
+                'dual_lock_pad_width',
+                'dual_lock_pad_height',
+                center_x,
+                'dual_lock_center_y',
+            ),
             'wall_shadow_gap',
         )
         field.name = side + ' 3M Dual Lock field - prototype'
