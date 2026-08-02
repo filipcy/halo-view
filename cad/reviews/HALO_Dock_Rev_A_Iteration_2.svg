@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">HALO Dock Rev A Iteration 2 mechanical geometry review</title>
+  <desc id="desc">Front and side schematics showing an open top, side guides, lower shelf, non-final side detents, hidden mounting fields, 1.5 millimetre shadow gap, and 18 millimetre installed projection.</desc>
+  <style>text{font-family:Arial,sans-serif;fill:#172033}.h{font-size:28px;font-weight:700}.s{font-size:19px;font-weight:700}.n{font-size:16px}.dim{stroke:#d14b35;stroke-width:2;fill:none}.dock{fill:#9eb7ca;stroke:#28475d;stroke-width:3}.tablet{fill:#e9eef2;stroke:#526575;stroke-width:3}.mount{fill:#f4b860;stroke:#80551a;stroke-width:2}.concept{fill:#ef7f7f;stroke:#8b2424;stroke-width:2}.wall{stroke:#202936;stroke-width:8}.dash{stroke-dasharray:8 7}</style>
+  <rect width="1200" height="760" fill="#fff"/>
+  <text x="55" y="55" class="h">HALO Dock Rev A — Iteration 2</text>
+  <text x="55" y="88" class="n">Mechanical layout only · all dimensions parameter-driven · not a print release</text>
+  <text x="170" y="135" class="s">Front / insertion view</text>
+  <rect x="165" y="170" width="300" height="480" rx="42" class="dock"/>
+  <rect x="181" y="184" width="268" height="438" rx="36" fill="#fff" stroke="none"/>
+  <rect x="191" y="198" width="248" height="405" rx="34" class="tablet"/>
+  <rect x="178" y="218" width="13" height="365" class="dock"/>
+  <rect x="439" y="218" width="13" height="365" class="dock"/>
+  <rect x="191" y="603" width="248" height="16" class="dock"/>
+  <rect x="187" y="230" width="4" height="40" class="concept"/>
+  <rect x="439" y="230" width="4" height="40" class="concept"/>
+  <path d="M315 210 V130 M305 145 L315 130 L325 145" class="dim"/>
+  <text x="330" y="160" class="n">fully open top insertion path</text>
+  <text x="55" y="375" class="n">side guide</text><path d="M145 368 H178" class="dim"/>
+  <text x="235" y="685" class="n">lower support shelf</text><path d="M315 665 V619" class="dim"/>
+  <text x="462" y="250" class="n">non-final retention concept only</text><path d="M455 258 H443" class="dim"/>
+  <text x="735" y="135" class="s">Installed side stack</text>
+  <line x1="700" y1="185" x2="700" y2="620" class="wall"/>
+  <rect x="700" y="255" width="54" height="110" class="mount"/>
+  <rect x="754" y="220" width="105" height="360" class="dock"/>
+  <rect x="859" y="235" width="145" height="330" class="tablet"/>
+  <rect x="1004" y="225" width="15" height="350" class="dock"/>
+  <path d="M700 650 H1019 M700 638 V662 M1019 638 V662" class="dim"/>
+  <text x="780" y="690" class="s">18.0 mm nominal projection</text>
+  <path d="M700 395 H754 M700 385 V405 M754 385 V405" class="dim"/>
+  <text x="691" y="430" class="n">1.5 mm actual shadow gap</text>
+  <text x="663" y="242" class="n">wall</text>
+  <text x="708" y="290" class="n" transform="rotate(90 708 290)">hidden flat Dual Lock field</text>
+  <text x="775" y="205" class="n">projection-controlled backing</text>
+  <text x="875" y="600" class="n">TabletEnvelope (no intended intersection)</text>
+  <line x1="55" y1="720" x2="1145" y2="720" stroke="#aab4bf"/>
+  <text x="55" y="747" class="n">Excluded: USB routing · final latch · cosmetic finishing</text>
+</svg>
