@@ -1229,8 +1229,8 @@ def _validate_printable_coupon(component, part_id):
     design = component.parentDesign
     tolerance = 0.01  # Fusion internal centimetres: 0.1 mm.
     expected_x = None
-    expected_y = None
     expected_z = None
+    clearance_dimensions = None
     if part_id == COUPON_PART_IDS['faceplate_cable']:
         expected_x = _mm(design, 'faceplate_cable_coupon_width')
     elif part_id == COUPON_PART_IDS['guide']:
@@ -1239,17 +1239,44 @@ def _validate_printable_coupon(component, part_id):
         for clearance, safe in (('0.2', '0_2'), ('0.3', '0_3'), ('0.4', '0_4')):
             if part_id == COUPON_PART_IDS[clearance]:
                 expected_x = _mm(design, 'coupon_fit_outer_width_' + safe)
-                expected_y = _mm(design, 'coupon_fit_outer_height')
                 expected_z = _mm(design, 'lower_support_thickness')
+                clearance_dimensions = (
+                    expected_x,
+                    _mm(design, 'coupon_fit_slot_width_' + safe),
+                )
     controlled = (
         (extents[0], expected_x),
-        (extents[1], expected_y),
         (extents[2], expected_z),
     )
     if any(expected is not None and abs(actual - expected) > tolerance
            for actual, expected in controlled):
         raise _failure(
             'Coupon export blocked: controlled extent is outside 0.1 mm tolerance.')
+
+    if clearance_dimensions:
+        outer_width, slot_width = clearance_dimensions
+        expected_vertex_x = (
+            -outer_width / 2, -slot_width / 2,
+            slot_width / 2, outer_width / 2)
+        vertex_x = sorted(body.vertices.item(index).geometry.x
+                          for index in range(body.vertices.count))
+        x_clusters = []
+        for coordinate in vertex_x:
+            if not x_clusters or abs(coordinate - x_clusters[-1][-1]) > tolerance:
+                x_clusters.append([coordinate])
+            else:
+                x_clusters[-1].append(coordinate)
+        cluster_centers = [sum(cluster) / len(cluster) for cluster in x_clusters]
+        if any(not any(abs(actual - expected) <= tolerance
+                       for actual in cluster_centers)
+               for expected in expected_vertex_x):
+            raise _failure(
+                'Clearance coupon is missing a controlled outer or slot X position.')
+        minimum_y = _mm(design, 'coupon_fit_rail_length')
+        maximum_y = minimum_y + _mm(design, 'coupon_fit_base_height')
+        if extents[1] < minimum_y - tolerance or extents[1] > maximum_y + tolerance:
+            raise _failure(
+                'Clearance coupon Y extent is outside the functional 30–33 mm range.')
 
 
 def _validate_full_size_release(design):

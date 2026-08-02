@@ -228,7 +228,6 @@ class Sprint3StaticGuards(unittest.TestCase):
         self.assertIn("COUPON_PART_IDS['guide']", validator)
         self.assertIn("'coupon_shelf_width'", validator)
         self.assertIn("'coupon_fit_outer_width_' + safe", validator)
-        self.assertIn("'coupon_fit_outer_height'", validator)
         self.assertIn("'lower_support_thickness'", validator)
         self.assertIn('existing_bodies.append', validator)
         self.assertIn('existing.name', validator)
@@ -240,6 +239,25 @@ class Sprint3StaticGuards(unittest.TestCase):
         branch = '\n'.join(ast.unparse(node) for node in coupon_branch.body)
         self.assertNotIn("FULL_SIZE_PART_IDS['faceplate']", branch)
         self.assertNotIn("FULL_SIZE_PART_IDS['dock_body']", branch)
+
+    def test_clearance_validation_uses_x_vertices_and_functional_y_range(self):
+        validator = ast.unparse(function('_validate_printable_coupon'))
+        self.assertNotIn("expected_y = _mm(design, 'coupon_fit_outer_height')", validator)
+        self.assertIn("_mm(design, 'coupon_fit_outer_width_' + safe)", validator)
+        self.assertIn("_mm(design, 'coupon_fit_slot_width_' + safe)", validator)
+        self.assertIn('body.vertices.item(index).geometry.x', validator)
+        self.assertIn('x_clusters', validator)
+        self.assertIn('cluster_centers', validator)
+        self.assertIn('-outer_width / 2', validator)
+        self.assertIn('-slot_width / 2', validator)
+        self.assertIn('slot_width / 2', validator)
+        self.assertIn('outer_width / 2', validator)
+        self.assertIn("minimum_y = _mm(design, 'coupon_fit_rail_length')", validator)
+        self.assertIn("maximum_y = minimum_y + _mm(design, 'coupon_fit_base_height')", validator)
+        self.assertIn('extents[1] < minimum_y - tolerance', validator)
+        self.assertIn('extents[1] > maximum_y + tolerance', validator)
+        self.assertIn('(extents[0], expected_x)', validator)
+        self.assertIn('(extents[2], expected_z)', validator)
 
     def test_full_size_cable_review_gate_defaults_false(self):
         gates = assignment('FULL_SIZE_RELEASE_GATES')
