@@ -188,17 +188,10 @@ class Sprint3StaticGuards(unittest.TestCase):
                         '_build_faceplate_cable_coupon'):
             self.assertIn('_cut_cable_profile', ast.unparse(function(builder)))
 
-    def test_cable_envelope_is_temporary_and_parameter_derived(self):
-        temporary = ast.unparse(function('_create_temporary_cable_envelope'))
-        self.assertIn('OrientedBoundingBox3D.create', temporary)
-        self.assertIn('TemporaryBRepManager.get()', temporary)
-        self.assertIn('manager.createBox(oriented_box)', temporary)
-        self.assertIn('body.isTemporary', temporary)
-        self.assertIn('body.preciseBoundingBox', temporary)
-        self.assertIn('expected_min =', temporary)
-        self.assertIn('expected_max =', temporary)
-        self.assertIn("_mm(design, 'cable_pocket_center_x')", temporary)
-        self.assertIn("_mm(design, 'cable_pocket_center_y')", temporary)
+    def test_no_cable_reference_body_or_temporary_box_remains(self):
+        self.assertNotIn('OrientedBoundingBox3D', SOURCE)
+        self.assertNotIn('createBox', SOURCE)
+        self.assertNotIn('TemporaryBRepManager', SOURCE)
         self.assertNotIn("_new_component(root, 'CableEnvelope')", SOURCE)
         self.assertNotIn('def _build_cable_envelope', SOURCE)
 
@@ -212,15 +205,43 @@ class Sprint3StaticGuards(unittest.TestCase):
         export = ast.unparse(function('_export_outputs'))
         self.assertIn('design.computeAll()', export)
         self.assertIn('_validate_timeline_health(design)', export)
-        self.assertIn('_validate_cable_clearance', export)
+        self.assertNotIn('_validate_cable_clearance', export)
 
-    def test_temporary_reference_cannot_enter_export_lists(self):
+    def test_cable_reference_cannot_enter_export_lists(self):
         export = ast.unparse(function('_export_outputs'))
         run = ast.unparse(function('run'))
         self.assertNotIn('cable_envelope', export)
         self.assertNotIn('CableEnvelope', run)
-        self.assertNotIn('_create_temporary_cable_envelope', run)
         self.assertNotIn('_export_printable_part(export_manager, envelope_body', SOURCE)
+
+    def test_every_coupon_is_solid_validated_before_export(self):
+        validator = ast.unparse(function('_validate_printable_coupon'))
+        export = ast.unparse(function('_export_outputs'))
+        self.assertIn('_validate_printable_coupon(component, part_id)', export)
+        for guard in ('body_count != 1', 'not is_valid', 'not is_solid',
+                      'volume <= 0', 'faces <= 0', 'edges <= 0',
+                      'vertices <= 0', 'extent <= 0'):
+            self.assertIn(guard, validator)
+        self.assertIn('body.preciseBoundingBox', validator)
+        self.assertIn("COUPON_PART_IDS['faceplate_cable']", validator)
+        self.assertIn("'faceplate_cable_coupon_width'", validator)
+        self.assertIn("COUPON_PART_IDS['guide']", validator)
+        self.assertIn("'coupon_shelf_width'", validator)
+        coupon_branch = next(
+            n for n in ast.walk(function('_export_outputs'))
+            if isinstance(n, ast.If) and
+            'EXPORT_MODE == COUPONS_ONLY' in ast.unparse(n.test))
+        branch = '\n'.join(ast.unparse(node) for node in coupon_branch.body)
+        self.assertNotIn("FULL_SIZE_PART_IDS['faceplate']", branch)
+        self.assertNotIn("FULL_SIZE_PART_IDS['dock_body']", branch)
+
+    def test_full_size_cable_review_gate_defaults_false(self):
+        gates = assignment('FULL_SIZE_RELEASE_GATES')
+        self.assertIn('cable_clearance_native_review', gates)
+        self.assertFalse(gates['cable_clearance_native_review'])
+        self.assertIn('physical USB-C coupon test', SOURCE)
+        self.assertIn('native visual/interference review', SOURCE)
+        self.assertIn('written confirmation', SOURCE)
 
     def test_every_intersecting_printable_and_coupons_receive_cable_cut(self):
         faceplate = ast.unparse(function('_build_faceplate'))

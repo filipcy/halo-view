@@ -28,6 +28,10 @@ FULL_SIZE_RELEASE_GATES = {
     'coupons_approved': False,
     'clearance_selected': False,
     'corner_radius_selected': False,
+    # Set true only after a physical USB-C coupon test with the selected cable,
+    # native visual/interference review of the full Dock, and written confirmation
+    # that the connector housing and cable bend path are clear.
+    'cable_clearance_native_review': False,
     'slicer_stl_review': False,
     'written_full_size_authorization': False,
 }
@@ -595,61 +599,6 @@ def _validate_timeline_health(design):
             '\n'.join(unhealthy))
 
 
-def _create_temporary_cable_envelope(design):
-    """Create and validate a non-timeline rectangular interference body."""
-    width = _mm(design, 'cable_pocket_width')
-    run_depth = _mm(design, 'cable_pocket_run_depth')
-    height = _mm(design, 'cable_pocket_height')
-    center_x = _mm(design, 'cable_pocket_center_x')
-    center_y = _mm(design, 'cable_pocket_center_y')
-    center = adsk.core.Point3D.create(center_x, center_y, height / 2)
-    length_direction = adsk.core.Vector3D.create(1, 0, 0)
-    width_direction = adsk.core.Vector3D.create(0, 1, 0)
-    oriented_box = adsk.core.OrientedBoundingBox3D.create(
-        center, length_direction, width_direction, width, run_depth, height)
-    manager = adsk.fusion.TemporaryBRepManager.get()
-    body = manager.createBox(oriented_box)
-    expected_min = (center_x - width / 2, center_y - run_depth / 2, 0.0)
-    expected_max = (center_x + width / 2, center_y + run_depth / 2, height)
-    if (not body or not body.isTemporary or not body.isValid or
-            not body.isSolid or body.volume <= 0):
-        raise RuntimeError(
-            'Temporary cable envelope must be a valid, solid, positive-volume '
-            'TemporaryBRep body.')
-    bounds = body.preciseBoundingBox
-    actual = (
-        bounds.minPoint.x, bounds.minPoint.y, bounds.minPoint.z,
-        bounds.maxPoint.x, bounds.maxPoint.y, bounds.maxPoint.z)
-    expected = expected_min + expected_max
-    tolerance = 0.01  # Fusion internal centimetres: 0.1 mm; do not increase.
-    if any(abs(value - target) > tolerance
-           for value, target in zip(actual, expected)):
-        raise RuntimeError(
-            'Temporary cable envelope has incorrect world-space bounds. '
-            'Expected min/max (mm): {}; actual min/max (mm): {}.'.format(
-                tuple(value * 10 for value in expected),
-                tuple(value * 10 for value in actual)))
-    return body
-
-
-def _validate_cable_clearance(design, printable_components):
-    """Intersect printable body copies with a validated temporary envelope."""
-    envelope_body = _create_temporary_cable_envelope(design)
-    manager = adsk.fusion.TemporaryBRepManager.get()
-    for component in printable_components:
-        for index in range(component.bRepBodies.count):
-            intersection = manager.copy(envelope_body)
-            printable = manager.copy(component.bRepBodies.item(index))
-            intersects = manager.booleanOperation(
-                intersection, printable,
-                adsk.fusion.BooleanTypes.IntersectionBooleanType)
-            if intersects and intersection.physicalProperties.volume > 1e-9:
-                raise RuntimeError(
-                    'Temporary cable envelope intersects ' + component.name +
-                    ' after controlled cuts; printable export is blocked.')
-    envelope_body = None  # Drop the only temporary reference before export.
-
-
 def _ring_profile(sketch):
     ring_profiles = []
     for index in range(sketch.profiles.count):
@@ -1210,6 +1159,55 @@ def _export_printable_part(export_manager, component, output_dir, part_id):
     _export_stl(export_manager, component, os.path.join(output_dir, part_id + '.stl'))
 
 
+def _validate_printable_coupon(component, part_id):
+    """Reject empty, disconnected, invalid, or collapsed coupon components."""
+    body_count = component.bRepBodies.count
+    body = component.bRepBodies.item(0) if body_count == 1 else None
+    is_valid = body.isValid if body else False
+    is_solid = body.isSolid if body else False
+    volume = body.volume if body else 0.0
+    faces = body.faces.count if body else 0
+    edges = body.edges.count if body else 0
+    vertices = body.vertices.count if body else 0
+    bounds = body.preciseBoundingBox if body else None
+    extents = (
+        bounds.maxPoint.x - bounds.minPoint.x,
+        bounds.maxPoint.y - bounds.minPoint.y,
+        bounds.maxPoint.z - bounds.minPoint.z,
+    ) if bounds else (0.0, 0.0, 0.0)
+
+    def _failure(reason):
+        return RuntimeError(
+            reason + '\nPrintable coupon diagnostics:'
+            '\n  Part ID: ' + part_id +
+            '\n  component: ' + component.name +
+            '\n  body count: ' + str(body_count) +
+            '\n  body.isValid: ' + str(is_valid) +
+            '\n  body.isSolid: ' + str(is_solid) +
+            '\n  body.volume (mm^3): {:.6f}'.format(volume * 1000) +
+            '\n  face/edge/vertex counts: {}/{}/{}'.format(
+                faces, edges, vertices) +
+            '\n  precise X/Y/Z extents (mm): {:.3f}, {:.3f}, {:.3f}'.format(
+                extents[0] * 10, extents[1] * 10, extents[2] * 10))
+
+    if (body_count != 1 or not body or not is_valid or not is_solid or
+            volume <= 0 or faces <= 0 or edges <= 0 or vertices <= 0 or
+            any(extent <= 0 for extent in extents)):
+        raise _failure(
+            'Coupon export blocked: expected one valid, solid, positive BRep.')
+
+    design = component.parentDesign
+    tolerance = 0.01  # Fusion internal centimetres: 0.1 mm.
+    expected_x = None
+    if part_id == COUPON_PART_IDS['faceplate_cable']:
+        expected_x = _mm(design, 'faceplate_cable_coupon_width')
+    elif part_id == COUPON_PART_IDS['guide']:
+        expected_x = _mm(design, 'coupon_shelf_width')
+    if expected_x is not None and abs(extents[0] - expected_x) > tolerance:
+        raise _failure(
+            'Coupon export blocked: controlled X extent is outside 0.1 mm tolerance.')
+
+
 def _validate_full_size_release(design):
     _dual_lock_measurement(design, required=True)
     incomplete = [name for name, passed in FULL_SIZE_RELEASE_GATES.items() if not passed]
@@ -1230,11 +1228,15 @@ def _export_outputs(design, coupons, faceplate, dock_body):
     if not design.computeAll():
         raise RuntimeError('Export blocked because design.computeAll() returned False.')
     _validate_timeline_health(design)
-    _validate_cable_clearance(design, (faceplate, dock_body))
     if EXPORT_MODE == COUPONS_ONLY:
+        if not _dual_lock_measurement(design, required=False) and len(coupons) != 8:
+            raise RuntimeError(
+                'COUPONS_ONLY without measured Dual Lock must contain exactly '
+                '8 controlled coupons (8 STEP + 8 STL outputs).')
         # Each tuple is one printable component and one controlled Part ID.
         # Full parts and root/reference geometry are absent from this list.
         for component, part_id in coupons:
+            _validate_printable_coupon(component, part_id)
             if part_id in (
                 COUPON_PART_IDS['corner_R8_0'],
                 COUPON_PART_IDS['corner_R8_5'],
