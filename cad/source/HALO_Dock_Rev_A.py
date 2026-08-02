@@ -166,13 +166,31 @@ def _ensure_parameter(design, name, expression, comment, group='Coupons'):
 
 
 def _new_component(root, name):
-    occurrence = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
+    try:
+        occurrence = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
+    except RuntimeError as error:
+        if 'Part Design documents can only contain one component' in str(error):
+            raise RuntimeError(
+                'HALO Dock requires a Hybrid Design document because it creates '
+                'multiple internal components. Open or convert to Hybrid Design, '
+                'then rerun in a fresh empty document.'
+            ) from error
+        raise
     occurrence.component.name = name
     return occurrence.component
 
 
 def _set_dimension_expression(dimension, expression):
     dimension.parameter.expression = expression
+
+
+class _RoundedRectangleGeometry:
+    """Entities created for one closed, parameter-driven rounded rectangle."""
+
+    def __init__(self, sketch, lines, arcs):
+        self.lines = lines
+        self.arcs = arcs
+        self.profile = sketch.profiles.item(sketch.profiles.count - 1)
 
 
 def _rounded_rectangle(
@@ -183,8 +201,9 @@ def _rounded_rectangle(
     width_expression,
     height_expression,
     radius_expression,
+    concentric_with=None,
 ):
-    """Draw a rounded rectangle dimensioned from Fusion user parameters."""
+    """Draw a rounded rectangle, anchored or concentric with an outer one."""
     lines = sketch.sketchCurves.sketchLines
     arcs = sketch.sketchCurves.sketchArcs
     half_w, half_h = width / 2, height / 2
@@ -201,6 +220,11 @@ def _rounded_rectangle(
         arcs.addByCenterStartSweep(adsk.core.Point3D.create(-half_w + r, -half_h + r, 0), adsk.core.Point3D.create(-half_w + r, -half_h, 0), -3.141592653589793 / 2),
         arcs.addByCenterStartSweep(adsk.core.Point3D.create(-half_w + r, half_h - r, 0), adsk.core.Point3D.create(-half_w, half_h - r, 0), -3.141592653589793 / 2),
     )
+
+    constraints = sketch.geometricConstraints
+    if concentric_with is not None:
+        for outer_arc, inner_arc in zip(concentric_with.arcs, arc_entities):
+            constraints.addConcentric(outer_arc, inner_arc)
 
     dimensions = sketch.sketchDimensions
     horizontal = adsk.fusion.DimensionOrientations.HorizontalDimensionOrientation
@@ -230,29 +254,30 @@ def _rounded_rectangle(
         )
         _set_dimension_expression(dimension, radius_expression)
 
-    # Anchor the upper-right corner centre to the sketch origin. Together with
-    # the inferred coincidence/tangency constraints, this keeps both nested
-    # rounded rectangles concentric when their user parameters change.
-    corner_center = arc_entities[0].centerSketchPoint
-    x_dimension = dimensions.addDistanceDimension(
-        sketch.originPoint,
-        corner_center,
-        horizontal,
-        adsk.core.Point3D.create(half_w / 2, 0, 0),
-    )
-    _set_dimension_expression(
-        x_dimension, f'({width_expression}) / 2 - ({radius_expression})'
-    )
-    y_dimension = dimensions.addDistanceDimension(
-        sketch.originPoint,
-        corner_center,
-        vertical,
-        adsk.core.Point3D.create(0, half_h / 2, 0),
-    )
-    _set_dimension_expression(
-        y_dimension, f'({height_expression}) / 2 - ({radius_expression})'
-    )
-    return sketch.profiles.item(0)
+    # Only a standalone/outer loop is anchored. A nested loop instead inherits
+    # its deterministic location from the explicit corresponding concentric
+    # constraints above; duplicating these dimensions over-constrains Fusion.
+    if concentric_with is None:
+        corner_center = arc_entities[0].centerSketchPoint
+        x_dimension = dimensions.addDistanceDimension(
+            sketch.originPoint,
+            corner_center,
+            horizontal,
+            adsk.core.Point3D.create(half_w / 2, 0, 0),
+        )
+        _set_dimension_expression(
+            x_dimension, f'({width_expression}) / 2 - ({radius_expression})'
+        )
+        y_dimension = dimensions.addDistanceDimension(
+            sketch.originPoint,
+            corner_center,
+            vertical,
+            adsk.core.Point3D.create(0, half_h / 2, 0),
+        )
+        _set_dimension_expression(
+            y_dimension, f'({height_expression}) / 2 - ({radius_expression})'
+        )
+    return _RoundedRectangleGeometry(sketch, line_entities, arc_entities)
 
 
 def _extrude(component, profile, distance_expression, operation=adsk.fusion.FeatureOperations.NewBodyFeatureOperation):
@@ -435,7 +460,7 @@ def _build_tablet_envelope(design, root):
     component = _new_component(root, 'TabletEnvelope')
     sketch = component.sketches.add(component.xYConstructionPlane)
     sketch.name = 'Tablet outline (reference envelope)'
-    profile = _rounded_rectangle(
+    geometry = _rounded_rectangle(
         sketch,
         _mm(design, 'device_width'),
         _mm(design, 'device_height'),
@@ -444,17 +469,23 @@ def _build_tablet_envelope(design, root):
         'device_height',
         'device_corner_radius',
     )
-    body = _extrude(component, profile, 'device_thickness').bodies.item(0)
+    body = _extrude(component, geometry.profile, 'device_thickness').bodies.item(0)
     body.name = 'SM-X130 reference envelope - not for manufacture'
     return component
 
 
 def _ring_profile(sketch):
+    ring_profiles = []
     for index in range(sketch.profiles.count):
         profile = sketch.profiles.item(index)
         if profile.profileLoops.count == 2:
-            return profile
-    raise RuntimeError('Expected a closed Faceplate ring profile.')
+            ring_profiles.append(profile)
+    if len(ring_profiles) != 1:
+        raise RuntimeError(
+            'Expected exactly one closed two-loop Faceplate ring profile; found '
+            + str(len(ring_profiles)) + '.'
+        )
+    return ring_profiles[0]
 
 
 def _build_faceplate(design, root):
@@ -483,7 +514,7 @@ def _build_faceplate(design, root):
 
     lip_sketch = component.sketches.add(lip_rear_plane)
     lip_sketch.name = 'Faceplate visible lip and display opening'
-    _rounded_rectangle(
+    lip_outer = _rounded_rectangle(
         lip_sketch,
         device_width + (2 * bezel),
         device_height + (2 * bezel),
@@ -500,6 +531,7 @@ def _build_faceplate(design, root):
         'device_width - 2 * inner_lip_overlap',
         'device_height - 2 * inner_lip_overlap',
         'device_corner_radius - inner_lip_overlap',
+        concentric_with=lip_outer,
     )
     lip_feature = _extrude(component, _ring_profile(lip_sketch), 'screen_recess')
     lip_feature.name = 'Visible front lip - display recess'
@@ -507,7 +539,7 @@ def _build_faceplate(design, root):
 
     skirt_sketch = component.sketches.add(skirt_rear_plane)
     skirt_sketch.name = 'Faceplate rear perimeter skirt outside TabletEnvelope'
-    _rounded_rectangle(
+    skirt_outer = _rounded_rectangle(
         skirt_sketch,
         device_width + (2 * bezel),
         device_height + (2 * bezel),
@@ -524,6 +556,7 @@ def _build_faceplate(design, root):
         'device_width + 2 * pocket_clearance_x',
         'device_height + 2 * pocket_clearance_y',
         'device_corner_radius + pocket_clearance_x',
+        concentric_with=skirt_outer,
     )
     skirt_feature = _extrude(
         component,
@@ -544,7 +577,7 @@ def _build_dock_body(design, root):
     clearance_x = _mm(design, 'pocket_clearance_x')
     clearance_y = _mm(design, 'pocket_clearance_y')
     wall = _mm(design, 'dock_side_wall')
-    profile = _rounded_rectangle(
+    geometry = _rounded_rectangle(
         sketch,
         _mm(design, 'device_width') + (2 * clearance_x) + (2 * wall),
         _mm(design, 'device_height') + (2 * clearance_y) + (2 * wall),
@@ -553,7 +586,7 @@ def _build_dock_body(design, root):
         'device_height + 2 * pocket_clearance_y + 2 * dock_side_wall',
         'device_corner_radius + pocket_clearance_x + dock_side_wall',
     )
-    feature = _extrude(component, profile, '-dock_back_thickness')
+    feature = _extrude(component, geometry.profile, '-dock_back_thickness')
     feature.name = 'Iteration 2 projection-controlled backing'
     feature.bodies.item(0).name = 'HALO DockBody Rev A - backing'
 

@@ -22,6 +22,44 @@ def function(name):
 
 
 class Sprint3StaticGuards(unittest.TestCase):
+    def test_nested_rounded_rectangles_are_explicitly_concentric(self):
+        rounded = ast.unparse(function('_rounded_rectangle'))
+        self.assertIn('concentric_with=None', rounded)
+        self.assertIn('constraints.addConcentric(outer_arc, inner_arc)', rounded)
+        self.assertIn('zip(concentric_with.arcs, arc_entities)', rounded)
+
+    def test_only_outer_or_standalone_rectangle_has_origin_anchors(self):
+        rounded_node = function('_rounded_rectangle')
+        anchor_if = next(
+            node for node in ast.walk(rounded_node)
+            if isinstance(node, ast.If)
+            and ast.unparse(node.test) == 'concentric_with is None'
+            and 'sketch.originPoint' in ast.unparse(node)
+        )
+        self.assertEqual(ast.unparse(anchor_if).count('sketch.originPoint'), 2)
+        self.assertNotIn('sketch.originPoint', '\n'.join(
+            ast.unparse(node) for node in anchor_if.orelse
+        ))
+
+    def test_both_faceplate_inner_loops_use_outer_geometry(self):
+        faceplate = ast.unparse(function('_build_faceplate'))
+        self.assertIn('lip_outer = _rounded_rectangle', faceplate)
+        self.assertIn('concentric_with=lip_outer', faceplate)
+        self.assertIn('skirt_outer = _rounded_rectangle', faceplate)
+        self.assertIn('concentric_with=skirt_outer', faceplate)
+        self.assertEqual(faceplate.count('concentric_with='), 2)
+
+    def test_part_design_component_failure_explains_hybrid_design(self):
+        new_component = ast.unparse(function('_new_component'))
+        self.assertIn('Part Design documents can only contain one component', new_component)
+        self.assertIn('requires a Hybrid Design document', new_component)
+        self.assertIn('Open or convert to Hybrid Design', new_component)
+
+    def test_ring_profile_requires_exactly_one_closed_two_loop_region(self):
+        ring = ast.unparse(function('_ring_profile'))
+        self.assertIn('profile.profileLoops.count == 2', ring)
+        self.assertIn('len(ring_profiles) != 1', ring)
+
     def test_export_modes_and_safe_default(self):
         self.assertEqual(assignment('COUPONS_ONLY'), 'COUPONS_ONLY')
         self.assertEqual(assignment('FULL_SIZE_PRINT_CANDIDATE'), 'FULL_SIZE_PRINT_CANDIDATE')
