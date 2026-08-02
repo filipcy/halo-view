@@ -1,6 +1,7 @@
-"""HALO Dock Rev A, Iteration 2 parametric generator for Autodesk Fusion 360.
+"""HALO Dock Rev A Sprint 3 parametric generator for Autodesk Fusion 360.
 
-Iteration 2 adds the first fit, support, retention-concept, and wall-mount geometry.
+Sprint 3 adds coupon-first exports and measurement-gated wall-mount geometry to
+the accepted Iteration 2 model.  It does not constitute a manufacturing release.
 Run this script from Fusion 360's Scripts and Add-Ins dialog.
 """
 
@@ -12,6 +13,36 @@ import traceback
 
 APP = adsk.core.Application.get()
 UI = APP.userInterface if APP else None
+
+COUPONS_ONLY = 'COUPONS_ONLY'
+FULL_SIZE_PRINT_CANDIDATE = 'FULL_SIZE_PRINT_CANDIDATE'
+EXPORT_MODE = COUPONS_ONLY
+
+# These declarations are deliberately false in source control.  Set every gate
+# true only in the local Fusion session after recording the corresponding
+# evidence.  Selecting FULL_SIZE_PRINT_CANDIDATE alone is never authorization.
+FULL_SIZE_RELEASE_GATES = {
+    'native_fusion_run': False,
+    'rebuild_plus_1_mm': False,
+    'interference_check': False,
+    'coupons_approved': False,
+    'clearance_selected': False,
+    'slicer_stl_review': False,
+    'written_full_size_authorization': False,
+}
+COUPON_PART_IDS = {
+    '0.2': 'HALO_Dock_Rev_A_Clearance_0_2mm',
+    '0.3': 'HALO_Dock_Rev_A_Clearance_0_3mm',
+    '0.4': 'HALO_Dock_Rev_A_Clearance_0_4mm',
+    'corner': 'HALO_Dock_Rev_A_Faceplate_Open_Corner_L',
+    'guide': 'HALO_Dock_Rev_A_Side_Guide_Lower_Shelf',
+    'wall_right': 'HALO_Dock_Rev_A_Wall_Stack_Shadow_Gap_Right',
+    'wall_left': 'HALO_Dock_Rev_A_Wall_Stack_Shadow_Gap_Left',
+}
+FULL_SIZE_PART_IDS = {
+    'faceplate': 'HALO_Dock_Rev_A_Faceplate_PRINT_CANDIDATE_ONLY',
+    'dock_body': 'HALO_Dock_Rev_A_DockBody_PRINT_CANDIDATE_ONLY',
+}
 PARAMETERS = (
     # Captured device envelope.
     ('device_width', '125 mm', 'Device', 'Bare tablet width; validate by caliper'),
@@ -46,13 +77,37 @@ PARAMETERS = (
     ('retention_center_x_left', '-retention_center_x', 'Dock', 'Left non-final detent centre'),
     ('retention_center_y', 'device_height / 2 - retention_concept_height / 2', 'Dock', 'Non-final side detent location below the open top'),
     ('dock_center_x', '0 mm', 'Dock', 'Shared horizontal centre datum for DockBody features'),
-    # Iteration 2 mounting interface; adhesive thickness remains a prototype assumption.
+    # Sprint 3 coupons.
+    ('coupon_guide_clearance', '0.3 mm', 'Coupons', 'Selected per-side clearance for the guide/shelf coupon'),
+    ('coupon_guide_length', '30 mm', 'Coupons', 'Short guide engagement length; tablet inserts through open top'),
+    ('coupon_guide_inner_width', 'device_width + 2 * coupon_guide_clearance', 'Coupons', 'Actual tablet pocket width between coupon rails'),
+    ('coupon_guide_center_x', 'coupon_guide_inner_width / 2 + dock_side_wall / 2', 'Coupons', 'Right guide coupon rail centre magnitude'),
+    ('coupon_guide_center_x_left', '-coupon_guide_center_x', 'Coupons', 'Left guide coupon rail centre'),
+    ('coupon_guide_center_y', '-lower_support_thickness / 2', 'Coupons', 'Rail centre provides structural overlap with the lower shelf'),
+    ('coupon_shelf_width', 'coupon_guide_inner_width + 2 * dock_side_wall', 'Coupons', 'Shelf seating area spans the pocket and joins both rails'),
+    ('coupon_shelf_center_y', '-coupon_guide_length / 2 - lower_support_thickness / 2', 'Coupons', 'Shelf below the shortened guides'),
+    ('coupon_corner_arm_length', '52 mm', 'Coupons', 'Length of each open L coupon arm from the real corner'),
+    ('coupon_corner_outer_width', 'device_width + 2 * bezel_width', 'Coupons', 'Reference Faceplate outer width'),
+    ('coupon_corner_outer_height', 'device_height + 2 * bezel_width', 'Coupons', 'Reference Faceplate outer height'),
+    ('coupon_fit_rail_length', '30 mm', 'Coupons', 'Compact clearance-gauge rail length'),
+    ('coupon_fit_rail_width', '3 mm', 'Coupons', 'Clearance-gauge structural rail width'),
+    ('coupon_fit_base_height', '3 mm', 'Coupons', 'Clearance-gauge connecting base height'),
+    # Exact engaged thickness must be measured on the selected mated pair.
     ('dual_lock_pad_width', '25 mm', 'Wall interface', 'Flat hidden mounting field width'),
     ('dual_lock_pad_height', '50 mm', 'Wall interface', 'Flat hidden mounting field height'),
     ('dual_lock_pad_edge_offset', '12 mm', 'Wall interface', 'Field offset from DockBody side edge'),
     ('dual_lock_center_x', 'device_width / 2 + pocket_clearance_x + dock_side_wall - dual_lock_pad_edge_offset - dual_lock_pad_width / 2', 'Wall interface', 'Hidden mounting field centre magnitude'),
     ('dual_lock_center_x_left', '-dual_lock_center_x', 'Wall interface', 'Left hidden mounting field centre'),
     ('dual_lock_center_y', '0 mm', 'Wall interface', 'Hidden mounting field vertical centre'),
+    ('dual_lock_measured_engaged_thickness', '0 mm', 'Wall interface', 'REQUIRED PHYSICAL MEASUREMENT — exact selected Dual Lock pair; 0 mm means NOT MEASURED'),
+    ('dual_lock_recess_depth', 'dual_lock_measured_engaged_thickness - wall_shadow_gap', 'Wall interface', 'Measured stack excess received by the DockBody rear recess'),
+    ('dual_lock_remaining_back_thickness', 'dock_back_thickness - dual_lock_recess_depth', 'Wall interface', 'Reported structural backing thickness below each recess'),
+    ('wall_coupon_margin', '6 mm', 'Coupons', 'Open shadow-gap witness area around each Dual Lock pad'),
+    ('wall_coupon_field_spacing', '8 mm', 'Coupons', 'Open separation between symmetric wall coupon fields'),
+    ('wall_coupon_backing_width', 'dual_lock_pad_width + 2 * wall_coupon_margin', 'Coupons', 'Discrete DockBody witness block width around each pad recess'),
+    ('wall_coupon_backing_height', 'dual_lock_pad_height + 2 * wall_coupon_margin', 'Coupons', 'Discrete DockBody witness block height around each pad recess'),
+    ('wall_coupon_center_x', 'wall_coupon_backing_width / 2 + wall_coupon_field_spacing / 2', 'Coupons', 'Right wall coupon field centre magnitude'),
+    ('wall_coupon_center_x_left', '-wall_coupon_center_x', 'Coupons', 'Left wall coupon field centre'),
     ('usb_port_datum_x', '59 mm', 'Reserved', 'Confirmed horizontal datum from the left device edge'),
     ('usb_port_datum_y', '1 mm', 'Reserved', 'Approximate lower-edge offset; requires confirmation'),
     ('usb_opening_width', '8 mm', 'Reserved', 'Approximate port opening width'),
@@ -77,7 +132,10 @@ def _set_parameters(design):
     for name, expression, group, comment in PARAMETERS:
         existing = _parameter(design, name)
         if existing:
-            existing.expression = expression
+            # Never erase a physical measurement when the operator reruns the
+            # generator to create the now-unblocked wall coupon.
+            if name != 'dual_lock_measured_engaged_thickness':
+                existing.expression = expression
             existing.comment = comment
         else:
             design.userParameters.add(
@@ -93,6 +151,18 @@ def _set_parameters(design):
 def _mm(design, name):
     """Return a millimetre user parameter in Fusion's internal centimetres."""
     return _parameter(design, name).value
+
+
+def _ensure_parameter(design, name, expression, comment, group='Coupons'):
+    parameter = _parameter(design, name)
+    if parameter:
+        parameter.expression = expression
+        parameter.comment = comment
+    else:
+        parameter = design.userParameters.add(
+            name, adsk.core.ValueInput.createByString(expression), 'mm', comment)
+    parameter.groupName = group
+    return parameter
 
 
 def _new_component(root, name):
@@ -314,6 +384,41 @@ def _validate_iteration_2_geometry(design):
     if guide_top_y >= device_half_height - tolerance or retention_top_y > device_half_height + tolerance:
         raise RuntimeError('Guide or retention geometry would obstruct the fully open top insertion path.')
 
+    coupon_inner_width = _mm(design, 'coupon_guide_inner_width')
+    expected_coupon_width = _mm(design, 'device_width') + 2 * _mm(design, 'coupon_guide_clearance')
+    if abs(coupon_inner_width - expected_coupon_width) > tolerance:
+        raise RuntimeError('Guide coupon pocket must equal device_width + 2 * coupon_guide_clearance.')
+    if _mm(design, 'coupon_guide_clearance') < 0:
+        raise RuntimeError('coupon_guide_clearance must be non-negative.')
+    if _mm(design, 'coupon_corner_arm_length') <= _mm(design, 'bezel_width'):
+        raise RuntimeError('Open corner coupon arms must extend beyond the bezel.')
+
+
+def _dual_lock_measurement(design, required):
+    """Validate the selected physical wall stack; zero explicitly means unknown."""
+    measured = _mm(design, 'dual_lock_measured_engaged_thickness')
+    shadow_gap = _mm(design, 'wall_shadow_gap')
+    dock_back = _mm(design, 'dock_back_thickness')
+    if measured <= 0:
+        if required:
+            raise RuntimeError(
+                'BLOCKED — exact Dual Lock pair must be selected and measured before print release.'
+            )
+        return None
+    recess = measured - shadow_gap
+    if recess < 0:
+        raise RuntimeError('dual_lock_recess_depth cannot be negative; measured thickness must be at least wall_shadow_gap.')
+    if recess >= dock_back:
+        raise RuntimeError('Dual Lock recess would pass through dock_back_thickness.')
+    remaining = dock_back - recess
+    if remaining <= 0:
+        raise RuntimeError('Dual Lock recess must leave positive structural backing thickness.')
+    if abs(_mm(design, 'dual_lock_center_x') + _mm(design, 'dual_lock_center_x_left')) > 1e-6:
+        raise RuntimeError('Left and right Dual Lock fields must remain symmetric.')
+    if shadow_gap <= 0:
+        raise RuntimeError('An open visible shadow gap is required around the discrete pads.')
+    return recess, remaining
+
 
 def _offset_plane(component, expression, name):
     plane_input = component.constructionPlanes.createInput()
@@ -452,6 +557,29 @@ def _build_dock_body(design, root):
     feature.name = 'Iteration 2 projection-controlled backing'
     feature.bodies.item(0).name = 'HALO DockBody Rev A - backing'
 
+    # A measured stack thicker than the visible gap is received by two
+    # discrete rear pockets.  The selected Dual Lock then ends on the pocket
+    # floor, providing wall -> Dual Lock -> DockBody contact with no air gap.
+    measurement = _dual_lock_measurement(design, required=False)
+    if measurement and measurement[0] > 0:
+        rear_plane = _offset_plane(component, '-dock_back_thickness', 'DockBody rear mounting plane')
+        for side, center_x in (
+            ('Right', 'dual_lock_center_x'),
+            ('Left', 'dual_lock_center_x_left'),
+        ):
+            recess_sketch = component.sketches.add(rear_plane)
+            recess_sketch.name = side + ' measured Dual Lock recess footprint'
+            recess = _extrude(
+                component,
+                _centered_rectangle_profile(
+                    recess_sketch, design, 'dual_lock_pad_width',
+                    'dual_lock_pad_height', center_x, 'dual_lock_center_y'
+                ),
+                'dual_lock_recess_depth',
+                adsk.fusion.FeatureOperations.CutFeatureOperation,
+            )
+            recess.name = side + ' Dual Lock recess - measured stack'
+
     for side, center_x in (
         ('Right', 'guide_center_x'),
         ('Left', 'guide_center_x_left'),
@@ -515,7 +643,7 @@ def _build_dock_body(design, root):
 
 def _build_wall_interface(design, root):
     component = _new_component(root, 'WallInterface')
-    component.description = 'Hidden flat 3M Dual Lock mounting fields; adhesive specification is not final.'
+    component.description = 'Measured, discrete 3M Dual Lock pair envelopes; reference only, never printable spacer geometry.'
     wall_plane = _offset_plane(
         component,
         '-dock_back_thickness - wall_shadow_gap',
@@ -537,10 +665,203 @@ def _build_wall_interface(design, root):
                 center_x,
                 'dual_lock_center_y',
             ),
-            'wall_shadow_gap',
+            'dual_lock_measured_engaged_thickness',
         )
-        field.name = side + ' 3M Dual Lock field - prototype'
-        field.bodies.item(0).name = side + ' hidden flat mounting field'
+        field.name = side + ' selected 3M Dual Lock engaged envelope'
+        field.bodies.item(0).name = side + ' measured mounting stack - NOT PRINTABLE'
+    return component
+
+
+def _open_corner_l_profile(sketch, design, band_expression):
+    """Create one closed L solid profile, never a nested/closed ring profile."""
+    outer_w = _mm(design, 'coupon_corner_outer_width')
+    outer_h = _mm(design, 'coupon_corner_outer_height')
+    radius = _mm(design, 'device_corner_radius') + _mm(design, 'bezel_width')
+    arm = _mm(design, 'coupon_corner_arm_length')
+    # Both current band expressions are simple sums/differences of known
+    # parameters; use their evaluated value only to seed the constrained sketch.
+    if band_expression == 'bezel_width + inner_lip_overlap':
+        band = _mm(design, 'bezel_width') + _mm(design, 'inner_lip_overlap')
+    else:
+        band = _mm(design, 'bezel_width') - _mm(design, 'pocket_clearance_x')
+    right, top = outer_w / 2, outer_h / 2
+    center = (right - radius, top - radius)
+    points = (
+        (center[0], top), (right - arm, top),
+        (right - arm, top - band), (center[0], top - band),
+    )
+    lines = sketch.sketchCurves.sketchLines
+    entities = []
+    for start, end in zip(points[:-1], points[1:]):
+        entities.append(lines.addByTwoPoints(
+            adsk.core.Point3D.create(start[0], start[1], 0),
+            adsk.core.Point3D.create(end[0], end[1], 0),
+        ))
+    inner_arc = sketch.sketchCurves.sketchArcs.addByCenterStartSweep(
+        adsk.core.Point3D.create(center[0], center[1], 0),
+        adsk.core.Point3D.create(center[0], top - band, 0),
+        -3.141592653589793 / 2,
+    )
+    inner_right = inner_arc.endSketchPoint
+    inner_end = lines.addByTwoPoints(
+        inner_right, adsk.core.Point3D.create(right - band, top - arm, 0))
+    outer_end = lines.addByTwoPoints(
+        inner_end.endSketchPoint, adsk.core.Point3D.create(right, top - arm, 0))
+    outer_tangent = lines.addByTwoPoints(
+        outer_end.endSketchPoint, adsk.core.Point3D.create(right, center[1], 0))
+    entities.extend((inner_end, outer_end, outer_tangent))
+    outer_arc = sketch.sketchCurves.sketchArcs.addByCenterStartSweep(
+        adsk.core.Point3D.create(center[0], center[1], 0),
+        outer_tangent.endSketchPoint,
+        3.141592653589793 / 2,
+    )
+    # The outer arc ends on the first line's start point; adding a zero-length
+    # closing line here makes Fusion reject the profile on native execution.
+    constraints = sketch.geometricConstraints
+    constraints.addCoincident(entities[2].endSketchPoint, inner_arc.startSketchPoint)
+    constraints.addCoincident(outer_arc.endSketchPoint, entities[0].startSketchPoint)
+    constraints.addTangent(entities[2], inner_arc)
+    constraints.addTangent(inner_arc, entities[3])
+    constraints.addTangent(entities[5], outer_arc)
+    constraints.addTangent(outer_arc, entities[0])
+
+    dims = sketch.sketchDimensions
+    horizontal = adsk.fusion.DimensionOrientations.HorizontalDimensionOrientation
+    vertical = adsk.fusion.DimensionOrientations.VerticalDimensionOrientation
+    expressions = (
+        ('coupon_corner_arm_length - (device_corner_radius + bezel_width)', horizontal),
+        (band_expression, vertical),
+        (f'coupon_corner_arm_length - (device_corner_radius + bezel_width)', horizontal),
+        (f'coupon_corner_arm_length - (device_corner_radius + bezel_width)', vertical),
+        (band_expression, horizontal),
+        ('coupon_corner_arm_length - (device_corner_radius + bezel_width)', vertical),
+    )
+    for entity, (expression, orientation) in zip(entities, expressions):
+        dimension = dims.addDistanceDimension(
+            entity.startSketchPoint, entity.endSketchPoint, orientation,
+            adsk.core.Point3D.create(entity.startSketchPoint.geometry.x, entity.startSketchPoint.geometry.y, 0),
+        )
+        _set_dimension_expression(dimension, expression)
+    outer_radial = dims.addRadialDimension(outer_arc, adsk.core.Point3D.create(right, top, 0))
+    _set_dimension_expression(outer_radial, 'device_corner_radius + bezel_width')
+    inner_radial = dims.addRadialDimension(inner_arc, adsk.core.Point3D.create(
+        right - band, top - band, 0))
+    _set_dimension_expression(
+        inner_radial, f'device_corner_radius + bezel_width - ({band_expression})')
+    return sketch.profiles.item(0)
+
+
+def _build_faceplate_corner_coupon(design, root):
+    component = _new_component(root, 'Coupon_Faceplate_Open_Corner_L')
+    component.description = 'Open L coupon: real outer radius, top/side bezel, lip, recess, pocket clearance, and rear skirt.'
+    lip_plane = _offset_plane(component, 'device_thickness', 'Coupon lip display datum')
+    lip_sketch = component.sketches.add(lip_plane)
+    lip_sketch.name = 'OPEN L lip profile - static validation forbids ring loops'
+    lip = _extrude(component, _open_corner_l_profile(
+        lip_sketch, design, 'bezel_width + inner_lip_overlap'), 'screen_recess')
+    lip.name = 'Open L visible lip and front surface'
+    skirt_plane = _offset_plane(
+        component, 'device_thickness + screen_recess - front_thickness',
+        'Coupon rear skirt datum')
+    skirt_sketch = component.sketches.add(skirt_plane)
+    skirt_sketch.name = 'OPEN L rear skirt profile - pocket side remains open'
+    skirt = _extrude(component, _open_corner_l_profile(
+        skirt_sketch, design, 'bezel_width - pocket_clearance_x'),
+        'front_thickness - screen_recess')
+    skirt.name = 'Open L rear perimeter skirt and pocket clearance witness'
+    return component
+
+
+def _build_guide_shelf_coupon(design, root):
+    component = _new_component(root, 'Coupon_Side_Guide_Lower_Shelf')
+    component.description = 'Full device-width pocket with shortened open-top rails and full seating shelf.'
+    shelf_sketch = component.sketches.add(component.xYConstructionPlane)
+    shelf = _extrude(component, _centered_rectangle_profile(
+        shelf_sketch, design, 'coupon_shelf_width', 'lower_support_thickness',
+        'dock_center_x', 'coupon_shelf_center_y'), 'guide_depth')
+    shelf.name = 'Full pocket-width lower seating shelf and rail connector'
+    for side, center_x in (
+        ('Right', 'coupon_guide_center_x'),
+        ('Left', 'coupon_guide_center_x_left'),
+    ):
+        sketch = component.sketches.add(component.xYConstructionPlane)
+        rail = _extrude(component, _centered_rectangle_profile(
+            sketch, design, 'dock_side_wall', 'coupon_guide_length',
+            center_x, 'coupon_guide_center_y'), 'guide_depth',
+            adsk.fusion.FeatureOperations.JoinFeatureOperation)
+        rail.name = side + ' shortened guide coupon rail'
+    return component
+
+
+def _build_clearance_coupon(design, root, clearance_text):
+    safe = clearance_text.replace('.', '_')
+    component = _new_component(root, 'Coupon_Clearance_' + safe + 'mm')
+    component.description = 'Short physical slot gauge; evaluate on the real tablet at 100% scale.'
+    # A dedicated parameter preserves each candidate rather than mutating the
+    # selected assembly clearance.
+    parameter_name = 'coupon_fit_clearance_' + safe
+    center_right = 'coupon_fit_center_x_' + safe
+    center_left = center_right + '_left'
+    base_width = 'coupon_fit_base_width_' + safe
+    rail_center_y = 'coupon_fit_rail_center_y_' + safe
+    base_center_y = 'coupon_fit_base_center_y_' + safe
+    _ensure_parameter(design, parameter_name, clearance_text + ' mm',
+                      'Per-side candidate clearance')
+    _ensure_parameter(
+        design, center_right,
+        f'device_thickness / 2 + {parameter_name} + coupon_fit_rail_width / 2',
+        'Right clearance-gauge rail centre magnitude')
+    _ensure_parameter(design, center_left, '-' + center_right,
+                      'Left clearance-gauge rail centre')
+    _ensure_parameter(
+        design, base_width,
+        f'device_thickness + 2 * {parameter_name} + 2 * coupon_fit_rail_width',
+        'Connected clearance-gauge outside width')
+    _ensure_parameter(design, rail_center_y, '-coupon_fit_base_height / 2',
+                      'Rail centre overlaps the connecting base')
+    _ensure_parameter(
+        design, base_center_y,
+        '-coupon_fit_rail_length / 2 - coupon_fit_base_height / 2',
+        'Connecting base centre below the insertion slot')
+
+    base_sketch = component.sketches.add(component.xYConstructionPlane)
+    base = _extrude(component, _centered_rectangle_profile(
+        base_sketch, design, base_width, 'coupon_fit_base_height',
+        'dock_center_x', base_center_y), 'lower_support_thickness')
+    base.name = 'Connected fit-gauge base ' + clearance_text + ' mm'
+    for side, center_x in (('Right', center_right), ('Left', center_left)):
+        sketch = component.sketches.add(component.xYConstructionPlane)
+        rail = _extrude(component, _centered_rectangle_profile(
+            sketch, design, 'coupon_fit_rail_width', 'coupon_fit_rail_length',
+            center_x, rail_center_y), 'lower_support_thickness',
+            adsk.fusion.FeatureOperations.JoinFeatureOperation)
+        rail.name = side + ' fit gauge rail ' + clearance_text + ' mm'
+    return component
+
+
+def _build_wall_coupon_field(design, root, side, center_x):
+    """Build one controlled wall-stack test article with exactly one solid."""
+    measurement = _dual_lock_measurement(design, required=True)
+    component = _new_component(root, 'Coupon_Wall_Stack_Shadow_Gap_' + side)
+    component.description = (
+        side + ' single-field wall-stack article; separately exported so no '
+        'loose bodies or uncontrolled relative spacing enter one vendor file.')
+    sketch = component.sketches.add(component.xYConstructionPlane)
+    backing = _extrude(component, _centered_rectangle_profile(
+        sketch, design, 'wall_coupon_backing_width', 'wall_coupon_backing_height',
+        center_x, 'dual_lock_center_y'), '-dock_back_thickness')
+    backing.name = side + ' discrete wall coupon backing field'
+    if measurement[0] > 0:
+        rear_plane = _offset_plane(
+            component, '-dock_back_thickness', side + ' coupon rear plane')
+        pocket_sketch = component.sketches.add(rear_plane)
+        pocket = _extrude(component, _centered_rectangle_profile(
+            pocket_sketch, design, 'dual_lock_pad_width', 'dual_lock_pad_height',
+            center_x, 'dual_lock_center_y'), 'dual_lock_recess_depth',
+            adsk.fusion.FeatureOperations.CutFeatureOperation)
+        pocket.name = side + ' measured recess; bond pad to floor'
+    else:
+        backing.name += ' - zero recess; pad bonds to rear face'
     return component
 
 
@@ -549,35 +870,57 @@ def _build_assembly_placeholder(root):
     assembly.description = 'Placeholder: assembly joints, final latch, and service motion are deferred.'
 
 
-def _export_outputs(design, faceplate, dock_body):
-    output_dir = os.path.join(
-        os.path.expanduser('~'), 'Documents', 'HALO_Dock_Rev_A_Iteration_2'
-    )
-    os.makedirs(output_dir, exist_ok=True)
-    basename = 'HALO_Dock_Rev_A_Iteration_2'
-    export_manager = design.exportManager
+def _export_stl(export_manager, component, path):
+    options = export_manager.createSTLExportOptions(component, path)
+    options.meshRefinement = adsk.fusion.MeshRefinementSettings.MeshRefinementHigh
+    export_manager.execute(options)
 
-    archive_options = export_manager.createFusionArchiveExportOptions(
-        os.path.join(output_dir, basename + '.f3d')
-    )
-    export_manager.execute(archive_options)
 
-    step_options = export_manager.createSTEPExportOptions(
-        os.path.join(output_dir, basename + '.step'), design.rootComponent
-    )
-    export_manager.execute(step_options)
+def _export_step(export_manager, component, path):
+    """Export one controlled printable component, never the design root."""
+    options = export_manager.createSTEPExportOptions(path, component)
+    export_manager.execute(options)
 
-    for component, suffix in ((faceplate, 'Faceplate'), (dock_body, 'DockBody')):
-        stl_options = export_manager.createSTLExportOptions(
-            component, os.path.join(output_dir, basename + '_' + suffix + '.stl')
+
+def _export_printable_part(export_manager, component, output_dir, part_id):
+    """Keep vendor STEP/STL names and component scope in one fail-safe path."""
+    _export_step(export_manager, component, os.path.join(output_dir, part_id + '.step'))
+    _export_stl(export_manager, component, os.path.join(output_dir, part_id + '.stl'))
+
+
+def _validate_full_size_release(design):
+    _dual_lock_measurement(design, required=True)
+    incomplete = [name for name, passed in FULL_SIZE_RELEASE_GATES.items() if not passed]
+    if incomplete:
+        raise RuntimeError(
+            'FULL_SIZE_PRINT_CANDIDATE blocked; unmet evidence gates: ' + ', '.join(incomplete)
         )
-        stl_options.meshRefinement = adsk.fusion.MeshRefinementSettings.MeshRefinementHigh
-        export_manager.execute(stl_options)
 
-    viewport = APP.activeViewport
-    viewport.fit()
-    viewport.refresh()
-    viewport.saveAsImageFile(os.path.join(output_dir, basename + '.png'), 1920, 1080)
+
+def _export_outputs(design, coupons, faceplate, dock_body):
+    if EXPORT_MODE not in (COUPONS_ONLY, FULL_SIZE_PRINT_CANDIDATE):
+        raise RuntimeError('Unknown EXPORT_MODE: ' + str(EXPORT_MODE))
+    root_dir = os.path.join(os.path.expanduser('~'), 'Documents', 'HALO_Dock_Rev_A')
+    output_dir = os.path.join(
+        root_dir, 'coupons' if EXPORT_MODE == COUPONS_ONLY else 'print-candidate')
+    os.makedirs(output_dir, exist_ok=True)
+    export_manager = design.exportManager
+    if EXPORT_MODE == COUPONS_ONLY:
+        # Each tuple is one printable component and one controlled Part ID.
+        # Full parts and root/reference geometry are absent from this list.
+        for component, part_id in coupons:
+            _export_printable_part(export_manager, component, output_dir, part_id)
+    else:
+        _validate_full_size_release(design)
+        # There is intentionally no root-component STEP/F3D export. The design
+        # root contains TabletEnvelope, coupons, WallInterface references, and
+        # Assembly placeholder content that is prohibited in vendor output.
+        authorized_parts = (
+            (faceplate, FULL_SIZE_PART_IDS['faceplate']),
+            (dock_body, FULL_SIZE_PART_IDS['dock_body']),
+        )
+        for component, part_id in authorized_parts:
+            _export_printable_part(export_manager, component, output_dir, part_id)
     return output_dir
 
 
@@ -593,11 +936,33 @@ def run(context):
         _build_tablet_envelope(design, root)
         faceplate = _build_faceplate(design, root)
         dock_body = _build_dock_body(design, root)
-        _build_wall_interface(design, root)
+        if _dual_lock_measurement(design, required=False):
+            _build_wall_interface(design, root)
         _build_assembly_placeholder(root)
-        output_dir = _export_outputs(design, faceplate, dock_body)
+        coupons = []
+        for clearance in ('0.2', '0.3', '0.4'):
+            coupons.append((_build_clearance_coupon(design, root, clearance),
+                COUPON_PART_IDS[clearance]))
+        coupons.append((_build_faceplate_corner_coupon(design, root),
+            COUPON_PART_IDS['corner']))
+        coupons.append((_build_guide_shelf_coupon(design, root),
+            COUPON_PART_IDS['guide']))
+        if _dual_lock_measurement(design, required=False):
+            coupons.extend((
+                (_build_wall_coupon_field(
+                    design, root, 'Right', 'wall_coupon_center_x'),
+                 COUPON_PART_IDS['wall_right']),
+                (_build_wall_coupon_field(
+                    design, root, 'Left', 'wall_coupon_center_x_left'),
+                 COUPON_PART_IDS['wall_left']),
+            ))
+        output_dir = _export_outputs(design, coupons, faceplate, dock_body)
         if UI:
-            UI.messageBox('HALO Dock Rev A Iteration 2 generated and exported to:\n' + output_dir)
+            message = 'HALO Dock Rev A generated in ' + EXPORT_MODE + ' mode and exported to:\n' + output_dir
+            if not _dual_lock_measurement(design, required=False):
+                message += ('\n\nWall coupon omitted: BLOCKED — exact Dual Lock pair must be selected '
+                            'and measured before print release.')
+            UI.messageBox(message)
     except Exception:
         if UI:
             UI.messageBox('HALO Dock generation failed:\n{}'.format(traceback.format_exc()))
