@@ -43,7 +43,7 @@ class Sprint3StaticGuards(unittest.TestCase):
 
     def test_guide_coupon_is_device_width_derived_and_symmetric(self):
         self.assertIn("('coupon_guide_inner_width', 'device_width + 2 * coupon_guide_clearance'", SOURCE)
-        self.assertIn("('coupon_shelf_width', 'coupon_guide_inner_width'", SOURCE)
+        self.assertIn("('coupon_shelf_width', 'coupon_guide_inner_width + 2 * dock_side_wall'", SOURCE)
         self.assertIn("('coupon_guide_center_x_left', '-coupon_guide_center_x'", SOURCE)
         self.assertNotIn('coupon_guide_section_width', SOURCE)
 
@@ -55,6 +55,8 @@ class Sprint3StaticGuards(unittest.TestCase):
         self.assertNotIn('profileLoops.count == 2', profile)
         self.assertIn('coupon_corner_arm_length', profile)
         self.assertIn('addByCenterStartSweep', profile)
+        self.assertEqual(profile.count('addByCenterStartSweep'), 2)
+        self.assertNotIn('lines.addByTwoPoints(outer_arc.endSketchPoint', profile)
 
     def test_dual_lock_is_measurement_gated(self):
         self.assertNotIn('dual_lock_engaged_thickness', SOURCE)
@@ -63,6 +65,18 @@ class Sprint3StaticGuards(unittest.TestCase):
         validation = ast.unparse(function('_dual_lock_measurement'))
         for guard in ('measured <= 0', 'recess < 0', 'recess >= dock_back', 'remaining <= 0'):
             self.assertIn(guard, validation)
+
+    def test_physical_measurement_survives_generator_rerun(self):
+        setter = ast.unparse(function('_set_parameters'))
+        self.assertIn("name != 'dual_lock_measured_engaged_thickness'", setter)
+
+    def test_coupon_bodies_are_connected_and_zero_recess_is_safe(self):
+        guide = ast.unparse(function('_build_guide_shelf_coupon'))
+        fit = ast.unparse(function('_build_clearance_coupon'))
+        wall = ast.unparse(function('_build_wall_coupon'))
+        self.assertIn('JoinFeatureOperation', guide)
+        self.assertIn('JoinFeatureOperation', fit)
+        self.assertIn('measurement[0] > 0', wall)
 
     def test_all_required_pairs_use_signed_centres(self):
         for right, left in (
@@ -73,9 +87,11 @@ class Sprint3StaticGuards(unittest.TestCase):
             ('wall_coupon_center_x', 'wall_coupon_center_x_left'),
         ):
             self.assertIn(f"('{left}', '-{right}'", SOURCE)
-        # Fit gauge rails are generated in one signed loop, not independent offsets.
+        # Fit-gauge left centres are expressions derived from right centres,
+        # and both rails are generated through the same loop.
         fit = ast.unparse(function('_build_clearance_coupon'))
-        self.assertIn("('Right', 1), ('Left', -1)", fit)
+        self.assertIn("center_left, '-' + center_right", fit)
+        self.assertIn("('Right', center_right), ('Left', center_left)", fit)
 
     def test_manifest_matches_every_generated_stl_name(self):
         manifest = (ROOT / 'manufacturing/HALO_Dock_Rev_A_External_Print_Candidate/PART_MANIFEST.md').read_text()

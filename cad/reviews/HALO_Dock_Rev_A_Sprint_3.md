@@ -4,14 +4,16 @@
 
 ## Coupon review
 
-- The guide/shelf coupon has an inner rail spacing of `device_width + 2 × coupon_guide_clearance`; at current temporary device input and selected 0.3 mm clearance that expression evaluates nominally to 125.6 mm. This is an unevaluated CAD input, not an inspected print dimension. Its 30 mm rails are open at the top and the shelf spans the pocket, allowing the real tablet to descend vertically and fully seat.
-- `Coupon_Faceplate_Open_Corner_L` uses a single open L profile, with top and side arms meeting through the actual `device_corner_radius + bezel_width` outer arc. It includes separate visible lip and rear-skirt layers. There is no nested profile or closed ring around the device; the tablet extends freely beyond both arm ends.
-- Clearance coupons are process/slot gauges at 0.2, 0.3, and 0.4 mm per side.
+- The guide/shelf coupon has an inner rail spacing of `device_width + 2 × coupon_guide_clearance`; at current temporary device input and selected 0.3 mm clearance that expression evaluates nominally to 125.6 mm. This is an unevaluated CAD input, not an inspected print dimension. Its joined 30 mm rails are open at the top and overlap a connected shelf whose seating area spans the whole pocket, allowing the real tablet to descend vertically and fully seat.
+- `Coupon_Faceplate_Open_Corner_L` uses a single open L profile, with top and side arms joined by concentric outer and inner arcs. The outer arc is `device_corner_radius + bezel_width`; each inner arc is derived from its lip/skirt band so neither layer has a square corner that can collide with the real tablet. It includes separate visible lip and rear-skirt layers. There is no nested profile or closed ring around the device; the tablet extends freely beyond both arm ends.
+- Clearance coupons are connected U-shaped process/slot gauges at 0.2, 0.3, and 0.4 mm per side; their rails overlap and join a parametric base rather than exporting as loose bodies.
 - The wall coupon is omitted while `dual_lock_measured_engaged_thickness == 0 mm`. **BLOCKED — exact Dual Lock pair must be selected and measured before print release.**
 
 ## Dual Lock section intent
 
 `wall_shadow_gap` remains the visible 1.5 mm perimeter gap. Once an exact mated pair is measured, `dual_lock_recess_depth = dual_lock_measured_engaged_thickness - wall_shadow_gap`. Two symmetric, discrete rear pockets receive any measured excess; each real pad stack terminates on its pocket floor, forming wall → Dual Lock → DockBody contact. The generator rejects negative recess, through-depth recess, asymmetric fields, and non-positive remaining backing. Open space remains around and between fields; there is no printable full-area spacer.
+
+The generator preserves a non-zero `dual_lock_measured_engaged_thickness` already entered in Fusion when rerun; it must not reset physical evidence to the source default. A measured thickness exactly equal to the shadow gap is valid and produces a zero-depth recess without asking Fusion to create an invalid zero-distance cut.
 
 ## Mandatory native Fusion 360 and slicer checklist
 

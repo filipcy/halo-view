@@ -78,12 +78,15 @@ PARAMETERS = (
     ('coupon_guide_inner_width', 'device_width + 2 * coupon_guide_clearance', 'Coupons', 'Actual tablet pocket width between coupon rails'),
     ('coupon_guide_center_x', 'coupon_guide_inner_width / 2 + dock_side_wall / 2', 'Coupons', 'Right guide coupon rail centre magnitude'),
     ('coupon_guide_center_x_left', '-coupon_guide_center_x', 'Coupons', 'Left guide coupon rail centre'),
-    ('coupon_guide_center_y', '0 mm', 'Coupons', 'Guide coupon rail vertical centre'),
-    ('coupon_shelf_width', 'coupon_guide_inner_width', 'Coupons', 'Shelf spans the actual pocket width'),
+    ('coupon_guide_center_y', '-lower_support_thickness / 2', 'Coupons', 'Rail centre provides structural overlap with the lower shelf'),
+    ('coupon_shelf_width', 'coupon_guide_inner_width + 2 * dock_side_wall', 'Coupons', 'Shelf seating area spans the pocket and joins both rails'),
     ('coupon_shelf_center_y', '-coupon_guide_length / 2 - lower_support_thickness / 2', 'Coupons', 'Shelf below the shortened guides'),
     ('coupon_corner_arm_length', '52 mm', 'Coupons', 'Length of each open L coupon arm from the real corner'),
     ('coupon_corner_outer_width', 'device_width + 2 * bezel_width', 'Coupons', 'Reference Faceplate outer width'),
     ('coupon_corner_outer_height', 'device_height + 2 * bezel_width', 'Coupons', 'Reference Faceplate outer height'),
+    ('coupon_fit_rail_length', '30 mm', 'Coupons', 'Compact clearance-gauge rail length'),
+    ('coupon_fit_rail_width', '3 mm', 'Coupons', 'Clearance-gauge structural rail width'),
+    ('coupon_fit_base_height', '3 mm', 'Coupons', 'Clearance-gauge connecting base height'),
     # Exact engaged thickness must be measured on the selected mated pair.
     ('dual_lock_pad_width', '25 mm', 'Wall interface', 'Flat hidden mounting field width'),
     ('dual_lock_pad_height', '50 mm', 'Wall interface', 'Flat hidden mounting field height'),
@@ -124,7 +127,10 @@ def _set_parameters(design):
     for name, expression, group, comment in PARAMETERS:
         existing = _parameter(design, name)
         if existing:
-            existing.expression = expression
+            # Never erase a physical measurement when the operator reruns the
+            # generator to create the now-unblocked wall coupon.
+            if name != 'dual_lock_measured_engaged_thickness':
+                existing.expression = expression
             existing.comment = comment
         else:
             design.userParameters.add(
@@ -140,6 +146,18 @@ def _set_parameters(design):
 def _mm(design, name):
     """Return a millimetre user parameter in Fusion's internal centimetres."""
     return _parameter(design, name).value
+
+
+def _ensure_parameter(design, name, expression, comment, group='Coupons'):
+    parameter = _parameter(design, name)
+    if parameter:
+        parameter.expression = expression
+        parameter.comment = comment
+    else:
+        parameter = design.userParameters.add(
+            name, adsk.core.ValueInput.createByString(expression), 'mm', comment)
+    parameter.groupName = group
+    return parameter
 
 
 def _new_component(root, name):
@@ -662,11 +680,10 @@ def _open_corner_l_profile(sketch, design, band_expression):
     else:
         band = _mm(design, 'bezel_width') - _mm(design, 'pocket_clearance_x')
     right, top = outer_w / 2, outer_h / 2
+    center = (right - radius, top - radius)
     points = (
-        (right - radius, top), (right - arm, top),
-        (right - arm, top - band), (right - band, top - band),
-        (right - band, top - arm), (right, top - arm),
-        (right, top - radius),
+        (center[0], top), (right - arm, top),
+        (right - arm, top - band), (center[0], top - band),
     )
     lines = sketch.sketchCurves.sketchLines
     entities = []
@@ -675,12 +692,33 @@ def _open_corner_l_profile(sketch, design, band_expression):
             adsk.core.Point3D.create(start[0], start[1], 0),
             adsk.core.Point3D.create(end[0], end[1], 0),
         ))
-    arc = sketch.sketchCurves.sketchArcs.addByCenterStartSweep(
-        adsk.core.Point3D.create(right - radius, top - radius, 0),
-        adsk.core.Point3D.create(right, top - radius, 0),
+    inner_arc = sketch.sketchCurves.sketchArcs.addByCenterStartSweep(
+        adsk.core.Point3D.create(center[0], center[1], 0),
+        adsk.core.Point3D.create(center[0], top - band, 0),
+        -3.141592653589793 / 2,
+    )
+    inner_right = inner_arc.endSketchPoint
+    inner_end = lines.addByTwoPoints(
+        inner_right, adsk.core.Point3D.create(right - band, top - arm, 0))
+    outer_end = lines.addByTwoPoints(
+        inner_end.endSketchPoint, adsk.core.Point3D.create(right, top - arm, 0))
+    outer_tangent = lines.addByTwoPoints(
+        outer_end.endSketchPoint, adsk.core.Point3D.create(right, center[1], 0))
+    entities.extend((inner_end, outer_end, outer_tangent))
+    outer_arc = sketch.sketchCurves.sketchArcs.addByCenterStartSweep(
+        adsk.core.Point3D.create(center[0], center[1], 0),
+        outer_tangent.endSketchPoint,
         3.141592653589793 / 2,
     )
-    lines.addByTwoPoints(arc.endSketchPoint, entities[0].startSketchPoint)
+    # The outer arc ends on the first line's start point; adding a zero-length
+    # closing line here makes Fusion reject the profile on native execution.
+    constraints = sketch.geometricConstraints
+    constraints.addCoincident(entities[2].endSketchPoint, inner_arc.startSketchPoint)
+    constraints.addCoincident(outer_arc.endSketchPoint, entities[0].startSketchPoint)
+    constraints.addTangent(entities[2], inner_arc)
+    constraints.addTangent(inner_arc, entities[3])
+    constraints.addTangent(entities[5], outer_arc)
+    constraints.addTangent(outer_arc, entities[0])
 
     dims = sketch.sketchDimensions
     horizontal = adsk.fusion.DimensionOrientations.HorizontalDimensionOrientation
@@ -688,8 +726,8 @@ def _open_corner_l_profile(sketch, design, band_expression):
     expressions = (
         ('coupon_corner_arm_length - (device_corner_radius + bezel_width)', horizontal),
         (band_expression, vertical),
-        (f'coupon_corner_arm_length - ({band_expression})', horizontal),
-        (f'coupon_corner_arm_length - ({band_expression})', vertical),
+        (f'coupon_corner_arm_length - (device_corner_radius + bezel_width)', horizontal),
+        (f'coupon_corner_arm_length - (device_corner_radius + bezel_width)', vertical),
         (band_expression, horizontal),
         ('coupon_corner_arm_length - (device_corner_radius + bezel_width)', vertical),
     )
@@ -699,8 +737,12 @@ def _open_corner_l_profile(sketch, design, band_expression):
             adsk.core.Point3D.create(entity.startSketchPoint.geometry.x, entity.startSketchPoint.geometry.y, 0),
         )
         _set_dimension_expression(dimension, expression)
-    radial = dims.addRadialDimension(arc, adsk.core.Point3D.create(right, top, 0))
-    _set_dimension_expression(radial, 'device_corner_radius + bezel_width')
+    outer_radial = dims.addRadialDimension(outer_arc, adsk.core.Point3D.create(right, top, 0))
+    _set_dimension_expression(outer_radial, 'device_corner_radius + bezel_width')
+    inner_radial = dims.addRadialDimension(inner_arc, adsk.core.Point3D.create(
+        right - band, top - band, 0))
+    _set_dimension_expression(
+        inner_radial, f'device_corner_radius + bezel_width - ({band_expression})')
     return sketch.profiles.item(0)
 
 
@@ -728,6 +770,11 @@ def _build_faceplate_corner_coupon(design, root):
 def _build_guide_shelf_coupon(design, root):
     component = _new_component(root, 'Coupon_Side_Guide_Lower_Shelf')
     component.description = 'Full device-width pocket with shortened open-top rails and full seating shelf.'
+    shelf_sketch = component.sketches.add(component.xYConstructionPlane)
+    shelf = _extrude(component, _centered_rectangle_profile(
+        shelf_sketch, design, 'coupon_shelf_width', 'lower_support_thickness',
+        'dock_center_x', 'coupon_shelf_center_y'), 'guide_depth')
+    shelf.name = 'Full pocket-width lower seating shelf and rail connector'
     for side, center_x in (
         ('Right', 'coupon_guide_center_x'),
         ('Left', 'coupon_guide_center_x_left'),
@@ -735,13 +782,9 @@ def _build_guide_shelf_coupon(design, root):
         sketch = component.sketches.add(component.xYConstructionPlane)
         rail = _extrude(component, _centered_rectangle_profile(
             sketch, design, 'dock_side_wall', 'coupon_guide_length',
-            center_x, 'coupon_guide_center_y'), 'guide_depth')
+            center_x, 'coupon_guide_center_y'), 'guide_depth',
+            adsk.fusion.FeatureOperations.JoinFeatureOperation)
         rail.name = side + ' shortened guide coupon rail'
-    shelf_sketch = component.sketches.add(component.xYConstructionPlane)
-    shelf = _extrude(component, _centered_rectangle_profile(
-        shelf_sketch, design, 'coupon_shelf_width', 'lower_support_thickness',
-        'dock_center_x', 'coupon_shelf_center_y'), 'guide_depth')
-    shelf.name = 'Full pocket-width lower seating shelf'
     return component
 
 
@@ -752,26 +795,47 @@ def _build_clearance_coupon(design, root, clearance_text):
     # A dedicated parameter preserves each candidate rather than mutating the
     # selected assembly clearance.
     parameter_name = 'coupon_fit_clearance_' + safe
-    if not _parameter(design, parameter_name):
-        design.userParameters.add(parameter_name, adsk.core.ValueInput.createByString(
-            clearance_text + ' mm'), 'mm', 'Per-side candidate clearance')
-    # Two parallel walls around device_thickness provide a compact thickness/
-    # process gauge; the guide coupon separately verifies the full width.
-    wall = _mm(design, 'dock_side_wall')
-    gap = _mm(design, 'device_thickness') + 2 * _mm(design, parameter_name)
-    for side, sign in (('Right', 1), ('Left', -1)):
+    center_right = 'coupon_fit_center_x_' + safe
+    center_left = center_right + '_left'
+    base_width = 'coupon_fit_base_width_' + safe
+    rail_center_y = 'coupon_fit_rail_center_y_' + safe
+    base_center_y = 'coupon_fit_base_center_y_' + safe
+    _ensure_parameter(design, parameter_name, clearance_text + ' mm',
+                      'Per-side candidate clearance')
+    _ensure_parameter(
+        design, center_right,
+        f'device_thickness / 2 + {parameter_name} + coupon_fit_rail_width / 2',
+        'Right clearance-gauge rail centre magnitude')
+    _ensure_parameter(design, center_left, '-' + center_right,
+                      'Left clearance-gauge rail centre')
+    _ensure_parameter(
+        design, base_width,
+        f'device_thickness + 2 * {parameter_name} + 2 * coupon_fit_rail_width',
+        'Connected clearance-gauge outside width')
+    _ensure_parameter(design, rail_center_y, '-coupon_fit_base_height / 2',
+                      'Rail centre overlaps the connecting base')
+    _ensure_parameter(
+        design, base_center_y,
+        '-coupon_fit_rail_length / 2 - coupon_fit_base_height / 2',
+        'Connecting base centre below the insertion slot')
+
+    base_sketch = component.sketches.add(component.xYConstructionPlane)
+    base = _extrude(component, _centered_rectangle_profile(
+        base_sketch, design, base_width, 'coupon_fit_base_height',
+        'dock_center_x', base_center_y), 'lower_support_thickness')
+    base.name = 'Connected fit-gauge base ' + clearance_text + ' mm'
+    for side, center_x in (('Right', center_right), ('Left', center_left)):
         sketch = component.sketches.add(component.xYConstructionPlane)
-        lines = sketch.sketchCurves.sketchLines.addCenterPointRectangle(
-            adsk.core.Point3D.create(sign * (gap / 2 + wall / 2), 0, 0),
-            adsk.core.Point3D.create(sign * (gap / 2 + wall), 15, 0),
-        )
-        rail = _extrude(component, sketch.profiles.item(0), 'lower_support_thickness')
+        rail = _extrude(component, _centered_rectangle_profile(
+            sketch, design, 'coupon_fit_rail_width', 'coupon_fit_rail_length',
+            center_x, rail_center_y), 'lower_support_thickness',
+            adsk.fusion.FeatureOperations.JoinFeatureOperation)
         rail.name = side + ' fit gauge rail ' + clearance_text + ' mm'
     return component
 
 
 def _build_wall_coupon(design, root):
-    _dual_lock_measurement(design, required=True)
+    measurement = _dual_lock_measurement(design, required=True)
     component = _new_component(root, 'Coupon_Wall_Stack_Shadow_Gap')
     component.description = 'Two discrete measured pad pockets with open 1.5 mm shadow-gap witness area; no continuous spacer.'
     # Coupon backing is discrete behind each field and leaves the middle/open
@@ -783,13 +847,16 @@ def _build_wall_coupon(design, root):
             sketch, design, 'wall_coupon_backing_width', 'wall_coupon_backing_height',
             center_x, 'dual_lock_center_y'), '-dock_back_thickness')
         backing.name = side + ' discrete wall coupon backing field'
-        rear_plane = _offset_plane(component, '-dock_back_thickness', side + ' coupon rear plane')
-        pocket_sketch = component.sketches.add(rear_plane)
-        pocket = _extrude(component, _centered_rectangle_profile(
-            pocket_sketch, design, 'dual_lock_pad_width', 'dual_lock_pad_height',
-            center_x, 'dual_lock_center_y'), 'dual_lock_recess_depth',
-            adsk.fusion.FeatureOperations.CutFeatureOperation)
-        pocket.name = side + ' measured recess; bond pad to floor'
+        if measurement[0] > 0:
+            rear_plane = _offset_plane(component, '-dock_back_thickness', side + ' coupon rear plane')
+            pocket_sketch = component.sketches.add(rear_plane)
+            pocket = _extrude(component, _centered_rectangle_profile(
+                pocket_sketch, design, 'dual_lock_pad_width', 'dual_lock_pad_height',
+                center_x, 'dual_lock_center_y'), 'dual_lock_recess_depth',
+                adsk.fusion.FeatureOperations.CutFeatureOperation)
+            pocket.name = side + ' measured recess; bond pad to floor'
+        else:
+            backing.name += ' - zero recess; pad bonds to rear face'
     return component
 
 
