@@ -136,6 +136,8 @@ PARAMETERS = (
     ('cable_pocket_relief_run_depth', 'cable_pocket_run_depth + usb_downward_relief', 'Keep-outs', 'Relieved vertical cable pocket; accepted top edge stays fixed'),
     ('cable_pocket_center_y', '-device_height / 2 - cable_pocket_relief_run_depth / 2', 'Keep-outs', 'Open-bottom cable-run centre with additional relief only downward'),
     ('cable_pocket_cut_depth', 'cable_pocket_height + usb_rear_relief', 'Keep-outs', 'Connector pocket depth with additional rear relief'),
+    ('usb_internal_vertical_relief', '0.45 mm', 'Keep-outs', 'Symmetric internal cable-flex relief; approximately 0.5 mm above and 0.4 mm below'),
+    ('cable_pocket_internal_run_depth', 'cable_pocket_relief_run_depth + 2 * usb_internal_vertical_relief', 'Keep-outs', 'Rear internal channel height; connector centre and front opening remain unchanged'),
     ('camera_keepout_edge_x', '15.5 mm', 'Keep-outs', 'Camera centre from tablet left edge'),
     ('camera_keepout_edge_y', '196 mm', 'Keep-outs', 'Camera centre from tablet bottom edge'),
     ('camera_keepout_center_x', '-device_width / 2 + camera_keepout_edge_x', 'Keep-outs', 'Centred camera relief X datum'),
@@ -589,14 +591,16 @@ def _build_tablet_envelope(design, root):
     return component
 
 
-def _cut_cable_profile(component, design, plane, center_y, distance, name):
+def _cut_cable_profile(
+        component, design, plane, center_y, distance, name,
+        run_depth='cable_pocket_relief_run_depth'):
     """Cut the conservative controlled rectangular cable clearance."""
     sketch = component.sketches.add(plane)
     sketch.name = name + ' rectangular footprint'
     cut = _extrude(
         component,
         _centered_rectangle_profile(
-            sketch, design, 'cable_pocket_width', 'cable_pocket_relief_run_depth',
+            sketch, design, 'cable_pocket_width', run_depth,
             'cable_pocket_center_x', center_y),
         distance, adsk.fusion.FeatureOperations.CutFeatureOperation)
     cut.name = name + ' - conservative rectangular clearance'
@@ -783,7 +787,8 @@ def _build_dock_body(design, root):
     _cut_cable_profile(
         component, design, component.xYConstructionPlane,
         'cable_pocket_center_y', '-dock_back_thickness',
-        'DockBody backing USB-C cable clearance to rear management volume')
+        'DockBody backing USB-C cable clearance to rear management volume',
+        'cable_pocket_internal_run_depth')
 
     # A measured stack thicker than the visible gap is received by two
     # discrete rear pockets.  The selected Dual Lock then ends on the pocket
