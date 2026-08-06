@@ -138,13 +138,39 @@ class Sprint3StaticGuards(unittest.TestCase):
             self.assertIn(token, part_ids['corner_' + token])
             self.assertIn("('coupon_corner_radius_" + token, SOURCE)
         self.assertIn("('device_corner_radius', '8.5 mm'", SOURCE)
-        self.assertIn('PROVISIONAL AND UNVERIFIED', SOURCE)
+        self.assertIn('Selected from physical R8/R8.5/R9 coupon validation', SOURCE)
         self.assertFalse(assignment('FULL_SIZE_RELEASE_GATES')['corner_radius_selected'])
         run = ast.unparse(function('run'))
         self.assertIn("('R8_0', 'coupon_corner_radius_R8_0')", run)
         self.assertIn("('R8_5', 'coupon_corner_radius_R8_5')", run)
         self.assertIn("('R9_0', 'coupon_corner_radius_R9_0')", run)
         self.assertNotIn('device_corner_radius).expression', run)
+
+    def test_physical_fit_selections_and_coupon_sets_are_preserved(self):
+        self.assertIn("('pocket_clearance_x', '0.20 mm'", SOURCE)
+        self.assertIn("('pocket_clearance_y', '0.20 mm'", SOURCE)
+        self.assertIn("('device_corner_radius', '8.5 mm'", SOURCE)
+        run = ast.unparse(function('run'))
+        for clearance in ('0.2', '0.3', '0.4'):
+            self.assertIn(clearance, run)
+        for radius in ('R8_0', 'R8_5', 'R9_0'):
+            self.assertIn(radius, run)
+
+    def test_shelf_strength_and_usb_relief_are_guarded(self):
+        self.assertIn("('lower_support_thickness', '3 mm'", SOURCE)
+        self.assertIn("('shelf_hidden_structural_thickness', '3 mm'", SOURCE)
+        self.assertIn("('shelf_root_fillet_radius', '3 mm'", SOURCE)
+        self.assertIn("('usb_downward_relief', '0.30 mm'", SOURCE)
+        self.assertIn("('usb_rear_relief', '0.20 mm'", SOURCE)
+        reinforcement = ast.unparse(function('_add_shelf_root_reinforcement'))
+        self.assertIn('shelf_root_fillet_radius', reinforcement)
+        self.assertIn("'guide_depth'", reinforcement)
+        self.assertIn('JoinFeatureOperation', reinforcement)
+        dock = ast.unparse(function('_build_dock_body'))
+        self.assertIn("'cable_pocket_cut_depth'", dock)
+        self.assertIn('_add_shelf_root_reinforcement', dock)
+        self.assertIn("('cable_pocket_width', '18 mm'", SOURCE)
+        self.assertIn("-device_width / 2 + cable_pocket_edge_x", SOURCE)
 
     def test_pocket_depth_drives_full_stack_and_coupon_parity_guard(self):
         self.assertIn("('pocket_depth', 'device_thickness + 2 * pocket_clearance_z'", SOURCE)

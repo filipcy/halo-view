@@ -75,6 +75,8 @@ The visible Faceplate bezel is fixed at **6 mm**. A 7 mm alternative was visuall
 
 The initial tablet pocket uses a nominal clearance of **+0.3 mm per side**. This value is a prototype assumption and must be validated with a fit coupon or first prototype before production release.
 
+**Superseded for X/Y fit by ADR-017.** The 0.3 mm Z clearance and the complete 0.2/0.3/0.4 mm coupon set remain unchanged.
+
 ## ADR-011 — V1 scope remains hardware-only
 
 **Status:** Accepted  
@@ -116,3 +118,13 @@ The complete installed product targets approximately **18 mm total projection fr
 **Date:** 2026-08-01
 
 The visible Faceplate finish is fully matte rather than satin or gloss. Material, print orientation and finishing method must minimise layer glare, fingerprints and reflections in the hallway mirror.
+
+## ADR-017 — Coupon-validated tablet fit and USB-C relief
+
+**Status:** Accepted for Rev A physical fit correction
+
+**Date:** 2026-08-06
+
+Physical coupon validation selects **0.20 mm per side in X and Y** and an **8.5 mm device corner radius**. The 0.2/0.3/0.4 mm clearance coupons and R8/R8.5/R9 corner coupons remain controlled records and must not be removed.
+
+The accepted lower-shelf width and 3.0 mm height remain fixed. Hidden R3 root reinforcement and at least 3.0 mm hidden structural thickness strengthen the shelf without moving its tablet seating surface. The USB-C pocket gains 0.30 mm only downward and 0.20 mm only toward the rear/depth; its edge-derived horizontal datum and 18 mm width remain unchanged. The shelf continues to carry the tablet so a standard straight USB-C connector carries no tablet load. Release gates remain in force.

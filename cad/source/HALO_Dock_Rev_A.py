@@ -56,13 +56,13 @@ PARAMETERS = (
     ('device_width', '125 mm', 'Device', 'Bare tablet width; validate by caliper'),
     ('device_height', '211 mm', 'Device', 'Bare tablet height; validate by caliper'),
     ('device_thickness', '8 mm', 'Device', 'Maximum bare tablet thickness; validate by caliper'),
-    ('device_corner_radius', '8.5 mm', 'Device', 'PROVISIONAL AND UNVERIFIED; select only after coupon fit validation'),
+    ('device_corner_radius', '8.5 mm', 'Device', 'Selected from physical R8/R8.5/R9 coupon validation'),
     # Accepted Rev A interface values.
     ('bezel_width', '6 mm', 'Faceplate', 'Visible bezel around tablet'),
     ('inner_lip_overlap', '0.5 mm', 'Faceplate', 'Target overlap; verify against active display'),
     ('screen_recess', '0.8 mm', 'Faceplate', 'Display recess from Faceplate plane'),
-    ('pocket_clearance_x', '0.3 mm', 'Fit', 'Clearance per tablet side'),
-    ('pocket_clearance_y', '0.3 mm', 'Fit', 'Clearance per tablet end'),
+    ('pocket_clearance_x', '0.20 mm', 'Fit', 'Coupon-validated clearance per tablet side'),
+    ('pocket_clearance_y', '0.20 mm', 'Fit', 'Coupon-validated clearance per tablet end'),
     ('pocket_clearance_z', '0.3 mm', 'Fit', 'Clearance behind tablet'),
     ('pocket_depth', 'device_thickness + 2 * pocket_clearance_z', 'Fit', 'Usable pocket depth; matches the selected clearance-coupon slot width'),
     # Open engineering parameters selected for the Iteration 2 model.
@@ -72,6 +72,8 @@ PARAMETERS = (
     ('dock_back_thickness', 'total_projection_target - wall_shadow_gap - pocket_depth - screen_recess', 'Dock', 'Derived rear depth that closes the installed projection stack'),
     ('dock_side_wall', '3 mm', 'Dock', 'Prototype perimeter wall width'),
     ('lower_support_thickness', '3 mm', 'Dock', 'Reserved lower tablet support thickness'),
+    ('shelf_hidden_structural_thickness', '3 mm', 'Dock', 'Minimum hidden reinforcement thickness below the accepted shelf envelope'),
+    ('shelf_root_fillet_radius', '3 mm', 'Dock', 'Generous hidden round reinforcement at each shelf-to-guide root'),
     ('retention_clearance', '0.3 mm', 'Fit', 'Reserved retention feature clearance'),
     ('guide_depth', 'pocket_depth', 'Dock', 'Side-guide and shelf depth equals the usable tablet pocket depth'),
     ('guide_center_x', 'device_width / 2 + pocket_clearance_x + dock_side_wall / 2', 'Dock', 'Side-guide centre magnitude'),
@@ -105,7 +107,7 @@ PARAMETERS = (
     ('coupon_fit_rail_width', '3 mm', 'Coupons', 'Clearance-gauge structural rail width'),
     ('coupon_fit_base_height', '3 mm', 'Coupons', 'Clearance-gauge connecting base height'),
     ('coupon_fit_outer_height', 'coupon_fit_rail_length + coupon_fit_base_height / 2', 'Coupons', 'Controlled clearance-coupon Y extent; 31.5 mm'),
-    ('selected_clearance_coupon_slot_width', 'device_thickness + 2 * 0.3 mm', 'Coupons', '0.3 mm candidate slot selected provisionally for full-model depth parity'),
+    ('selected_clearance_coupon_slot_width', 'device_thickness + 2 * pocket_clearance_z', 'Coupons', 'Z/depth coupon parity; independent of the validated X/Y clearance'),
     # Exact engaged thickness must be measured on the selected mated pair.
     ('dual_lock_pad_width', '25 mm', 'Wall interface', 'Flat hidden mounting field width'),
     ('dual_lock_pad_height', '50 mm', 'Wall interface', 'Flat hidden mounting field height'),
@@ -129,7 +131,11 @@ PARAMETERS = (
     ('cable_pocket_width', '18 mm', 'Keep-outs', 'Generic plug/cable width envelope'),
     ('cable_pocket_height', '8 mm', 'Keep-outs', 'Generic plug/cable height envelope'),
     ('cable_pocket_run_depth', '20 mm', 'Keep-outs', 'Cable run below the tablet bottom edge'),
-    ('cable_pocket_center_y', '-device_height / 2 - cable_pocket_run_depth / 2', 'Keep-outs', 'Open-bottom cable-run centre'),
+    ('usb_downward_relief', '0.30 mm', 'Keep-outs', 'Additional downward connector-pocket relief after physical fit validation'),
+    ('usb_rear_relief', '0.20 mm', 'Keep-outs', 'Additional rear/depth connector-pocket relief after physical fit validation'),
+    ('cable_pocket_relief_run_depth', 'cable_pocket_run_depth + usb_downward_relief', 'Keep-outs', 'Relieved vertical cable pocket; accepted top edge stays fixed'),
+    ('cable_pocket_center_y', '-device_height / 2 - cable_pocket_relief_run_depth / 2', 'Keep-outs', 'Open-bottom cable-run centre with additional relief only downward'),
+    ('cable_pocket_cut_depth', 'cable_pocket_height + usb_rear_relief', 'Keep-outs', 'Connector pocket depth with additional rear relief'),
     ('camera_keepout_edge_x', '15.5 mm', 'Keep-outs', 'Camera centre from tablet left edge'),
     ('camera_keepout_edge_y', '196 mm', 'Keep-outs', 'Camera centre from tablet bottom edge'),
     ('camera_keepout_center_x', '-device_width / 2 + camera_keepout_edge_x', 'Keep-outs', 'Centred camera relief X datum'),
@@ -418,6 +424,14 @@ def _validate_iteration_2_geometry(design):
         raise RuntimeError('guide_depth must equal pocket_depth.')
     if _mm(design, 'retention_concept_width') <= 0:
         raise RuntimeError('Retention concept width must be positive.')
+    if _mm(design, 'shelf_hidden_structural_thickness') < 3 / 10:
+        raise RuntimeError('Lower shelf hidden structural thickness must be at least 3.0 mm.')
+    if _mm(design, 'shelf_root_fillet_radius') < 3 / 10:
+        raise RuntimeError('Lower shelf hidden root fillets must be at least R3.0 mm.')
+    if abs(_mm(design, 'usb_downward_relief') - 0.03) > tolerance:
+        raise RuntimeError('USB-C pocket must retain exactly 0.30 mm additional downward relief.')
+    if abs(_mm(design, 'usb_rear_relief') - 0.02) > tolerance:
+        raise RuntimeError('USB-C pocket must retain exactly 0.20 mm additional rear relief.')
 
     device_half_width = _mm(design, 'device_width') / 2
     device_half_height = _mm(design, 'device_height') / 2
@@ -453,7 +467,7 @@ def _validate_iteration_2_geometry(design):
     if _mm(design, 'button_remaining_wall') <= 0 or _mm(design, 'button_remaining_wall') < 1.5 / 10:
         raise RuntimeError('Button Relief must leave at least approximately 1.5 mm of guide wall.')
     tablet_bottom = -device_half_height
-    if _mm(design, 'cable_pocket_center_y') + _mm(design, 'cable_pocket_run_depth') / 2 > tablet_bottom + tolerance:
+    if _mm(design, 'cable_pocket_center_y') + _mm(design, 'cable_pocket_relief_run_depth') / 2 > tablet_bottom + tolerance:
         raise RuntimeError('Cable Pocket must not intersect TabletEnvelope above the USB edge.')
     shelf_left = -_mm(design, 'shelf_width') / 2
     shelf_right = _mm(design, 'shelf_width') / 2
@@ -568,11 +582,32 @@ def _cut_cable_profile(component, design, plane, center_y, distance, name):
     cut = _extrude(
         component,
         _centered_rectangle_profile(
-            sketch, design, 'cable_pocket_width', 'cable_pocket_run_depth',
+            sketch, design, 'cable_pocket_width', 'cable_pocket_relief_run_depth',
             'cable_pocket_center_x', center_y),
         distance, adsk.fusion.FeatureOperations.CutFeatureOperation)
     cut.name = name + ' - conservative rectangular clearance'
     return cut
+
+
+def _add_shelf_root_reinforcement(component, design, center_y_expression):
+    """Add hidden R3 rounds below the seat without changing its width/height."""
+    for side, center_x in (
+            ('Right', 'guide_center_x'), ('Left', 'guide_center_x_left')):
+        sketch = component.sketches.add(component.xYConstructionPlane)
+        sketch.name = side + ' hidden lower-shelf root fillet'
+        circle = sketch.sketchCurves.sketchCircles.addByCenterRadius(
+            adsk.core.Point3D.create(
+                _mm(design, center_x), _mm(design, center_y_expression), 0),
+            _mm(design, 'shelf_root_fillet_radius'))
+        diameter = sketch.sketchDimensions.addDiameterDimension(
+            circle, adsk.core.Point3D.create(
+                _mm(design, center_x), _mm(design, center_y_expression), 0))
+        _set_dimension_expression(diameter, '2 * shelf_root_fillet_radius')
+        reinforcement = _extrude(
+            component, sketch.profiles.item(0), 'guide_depth',
+            adsk.fusion.FeatureOperations.JoinFeatureOperation)
+        reinforcement.name = side + ' hidden R3 shelf-root reinforcement'
+        reinforcement.bodies.item(0).name = side + ' hidden shelf root fillet'
 
 
 def _validate_timeline_health(design):
@@ -815,13 +850,15 @@ def _build_dock_body(design, root):
     shelf.name = 'Lower support shelf'
     shelf.bodies.item(0).name = 'Lower tablet support shelf'
 
+    _add_shelf_root_reinforcement(component, design, 'shelf_center_y')
+
     _cut_speaker_slot(
         component, design, 'speaker_slot_plane_offset',
         'One simple lower-speaker opening - no grille')
 
     _cut_cable_profile(
         component, design, component.xYConstructionPlane,
-        'cable_pocket_center_y', 'cable_pocket_height',
+        'cable_pocket_center_y', 'cable_pocket_cut_depth',
         'Lower-shelf USB-C connector housing clearance')
 
     for side, center_x in (
