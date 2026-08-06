@@ -314,6 +314,27 @@ def _extrude(component, profile, distance_expression, operation=adsk.fusion.Feat
     return extrudes.add(feature_input)
 
 
+def _join_structural_bodies(component, target_body, feature_name):
+    """Combine every structural body in one printable component into target."""
+    tool_bodies = adsk.core.ObjectCollection.create()
+    for index in range(component.bRepBodies.count):
+        body = component.bRepBodies.item(index)
+        if body != target_body:
+            tool_bodies.add(body)
+    if tool_bodies.count:
+        combine_input = component.features.combineFeatures.createInput(
+            target_body, tool_bodies)
+        combine_input.operation = adsk.fusion.FeatureOperations.JoinFeatureOperation
+        combine_input.isKeepToolBodies = False
+        combine = component.features.combineFeatures.add(combine_input)
+        combine.name = feature_name
+    if component.bRepBodies.count != 1:
+        raise RuntimeError(
+            component.name + ' structural Join failed: expected exactly one '
+            'BRep body, found ' + str(component.bRepBodies.count) + '.')
+    return component.bRepBodies.item(0)
+
+
 def _centered_rectangle_profile(
     sketch,
     design,
@@ -741,6 +762,10 @@ def _build_faceplate(design, root):
         component, design, skirt_rear_plane, 'cable_pocket_center_y',
         'front_thickness - screen_recess',
         'Faceplate rear-skirt USB-C cable clearance')
+    unified_body = _join_structural_bodies(
+        component, lip_feature.bodies.item(0),
+        'Unify Faceplate front lip and rear perimeter skirt')
+    unified_body.name = 'HALO Faceplate Rev A - unified printable body'
     return component
 
 
@@ -895,6 +920,10 @@ def _build_dock_body(design, root):
         )
         retention.name = side + ' upper side detent concept - NOT FINAL'
         retention.bodies.item(0).name = side + ' retention concept - not released'
+    unified_body = _join_structural_bodies(
+        component, feature.bodies.item(0),
+        'Unify DockBody backing, guides, shelf, and retention structure')
+    unified_body.name = 'HALO DockBody Rev A - unified printable body'
     return component
 
 
@@ -1330,7 +1359,15 @@ def _validate_printable_coupon(component, part_id):
                 'Clearance coupon Y extent is outside the functional 30–33 mm range.')
 
 
-def _validate_full_size_release(design):
+def _validate_full_size_release(design, faceplate, dock_body):
+    if faceplate.bRepBodies.count != 1:
+        raise RuntimeError(
+            'FULL_SIZE_PRINT_CANDIDATE blocked: Faceplate must contain exactly '
+            'one BRep body; found ' + str(faceplate.bRepBodies.count) + '.')
+    if dock_body.bRepBodies.count != 1:
+        raise RuntimeError(
+            'FULL_SIZE_PRINT_CANDIDATE blocked: DockBody must contain exactly '
+            'one BRep body; found ' + str(dock_body.bRepBodies.count) + '.')
     _dual_lock_measurement(design, required=True)
     incomplete = [name for name, passed in FULL_SIZE_RELEASE_GATES.items() if not passed]
     if incomplete:
@@ -1367,7 +1404,7 @@ def _export_outputs(design, coupons, faceplate, dock_body):
                 _validate_open_corner_coupon(component, design)
             _export_printable_part(export_manager, component, output_dir, part_id)
     else:
-        _validate_full_size_release(design)
+        _validate_full_size_release(design, faceplate, dock_body)
         # There is intentionally no root-component STEP/F3D export. The design
         # root contains TabletEnvelope, coupons, WallInterface references, and
         # Assembly placeholder content that is prohibited in vendor output.
