@@ -159,19 +159,15 @@ class Sprint3StaticGuards(unittest.TestCase):
     def test_shelf_strength_and_usb_relief_are_guarded(self):
         self.assertIn("('lower_support_thickness', '3 mm'", SOURCE)
         self.assertIn("('shelf_hidden_structural_thickness', '3 mm'", SOURCE)
-        self.assertIn("('shelf_root_fillet_radius', 'shelf_hidden_structural_thickness'", SOURCE)
-        self.assertIn(
-            "shelf_center_y + lower_support_thickness / 2 - shelf_hidden_structural_thickness",
-            SOURCE)
+        self.assertIn("('shelf_root_gusset_width', 'dock_side_wall'", SOURCE)
         self.assertIn("('usb_downward_relief', '0.30 mm'", SOURCE)
         self.assertIn("('usb_rear_relief', '0.20 mm'", SOURCE)
         reinforcement = ast.unparse(function('_add_shelf_root_reinforcement'))
-        self.assertIn('shelf_root_fillet_radius', reinforcement)
-        self.assertIn('2 * shelf_root_fillet_radius', reinforcement)
-        self.assertIn('shelf_reinforcement_center_y', reinforcement)
-        self.assertIn('evaluated_center_x + 1.5 * evaluated_radius', reinforcement)
-        self.assertIn('evaluated_center_y + 1.5 * evaluated_radius', reinforcement)
-        self.assertIn('circle, diameter_text_point', reinforcement)
+        self.assertIn('_centered_rectangle_profile', reinforcement)
+        self.assertIn('shelf_root_gusset_width', reinforcement)
+        self.assertIn('shelf_hidden_structural_thickness', reinforcement)
+        self.assertIn("'shelf_center_y'", reinforcement)
+        self.assertNotIn('sketchCircles', reinforcement)
         self.assertIn("'guide_depth'", reinforcement)
         self.assertIn('JoinFeatureOperation', reinforcement)
         dock = ast.unparse(function('_build_dock_body'))
@@ -180,10 +176,23 @@ class Sprint3StaticGuards(unittest.TestCase):
         self.assertIn("('cable_pocket_width', '18 mm'", SOURCE)
         self.assertIn("-device_width / 2 + cable_pocket_edge_x", SOURCE)
         validate = ast.unparse(function('_validate_iteration_2_geometry'))
-        self.assertIn('reinforcement_top > shelf_top + tolerance', validate)
-        self.assertIn(
-            'Hidden shelf reinforcement must not extend above the accepted shelf top datum.',
-            validate)
+        self.assertIn("'shelf_hidden_structural_thickness') > _mm(design, 'lower_support_thickness'", validate)
+        self.assertIn("'shelf_root_gusset_width') > _mm(design, 'dock_side_wall'", validate)
+        self.assertIn('USB-C cable channel must not collide with the lower speaker opening.', validate)
+        self.assertIn('USB-C cable channel must remain below the camera and button keep-outs.', validate)
+
+    def test_rear_cable_route_is_a_projection_neutral_cut(self):
+        dock = ast.unparse(function('_build_dock_body'))
+        route_call = next(
+            node for node in ast.walk(function('_build_dock_body'))
+            if isinstance(node, ast.Call) and
+            isinstance(node.func, ast.Name) and node.func.id == '_cut_cable_profile' and
+            'DockBody backing USB-C cable clearance' in ast.unparse(node))
+        self.assertIn("'-dock_back_thickness'", ast.unparse(route_call))
+        cutter = ast.unparse(function('_cut_cable_profile'))
+        self.assertIn('CutFeatureOperation', cutter)
+        self.assertNotIn('JoinFeatureOperation', cutter)
+        self.assertIn('DockBody backing USB-C cable clearance', dock)
 
     def test_pocket_depth_drives_full_stack_and_coupon_parity_guard(self):
         self.assertIn("('pocket_depth', 'device_thickness + 2 * pocket_clearance_z'", SOURCE)

@@ -11,6 +11,6 @@ Quarantine parts until inspection is recorded. Never scale or automatically repa
 7. Wall articles: **BLOCKED until exact pair measurement.** Receive the separately named left and right single-solid articles; reject a file containing two loose bodies. Verify equivalent discrete recesses, flat bond faces, real samples contacting pocket floors, a 1.5 mm visible-gap witness, and no continuous shadow-gap filler.
 8. Photograph, measure, and disposition every nonconformance. No physical coupon result releases a full-size print automatically.
 9. For the corrected USB-C pocket, verify the accepted edge-based horizontal datum and 18 mm width, plus 0.30 mm added downward and 0.20 mm added rear/depth relief using the selected straight cable. Confirm the tablet seats on the shelf with no load transferred to the connector.
-10. Inspect the accepted-width, 3.0 mm-high lower shelf and its hidden R3 roots for complete material, cracks, or layer separation. Do not grind or thin the tablet seating surface.
+10. Inspect the accepted-width, 3.0 mm-high lower shelf and its hidden internal root gussets for complete material, cracks, or layer separation. Reject exposed material outside the DockBody outline; do not grind or thin the tablet seating surface.
 
 Full Faceplate/DockBody parts require a separate receiving plan tied to written full-size authorization; they are not currently orderable.

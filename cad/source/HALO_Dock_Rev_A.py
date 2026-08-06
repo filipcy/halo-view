@@ -72,8 +72,8 @@ PARAMETERS = (
     ('dock_back_thickness', 'total_projection_target - wall_shadow_gap - pocket_depth - screen_recess', 'Dock', 'Derived rear depth that closes the installed projection stack'),
     ('dock_side_wall', '3 mm', 'Dock', 'Prototype perimeter wall width'),
     ('lower_support_thickness', '3 mm', 'Dock', 'Reserved lower tablet support thickness'),
-    ('shelf_hidden_structural_thickness', '3 mm', 'Dock', 'Hidden reinforcement depth below the accepted shelf top datum'),
-    ('shelf_root_fillet_radius', 'shelf_hidden_structural_thickness', 'Dock', 'Generous hidden round reinforcement driven by structural thickness'),
+    ('shelf_hidden_structural_thickness', '3 mm', 'Dock', 'Internal gusset height contained within the accepted shelf outline'),
+    ('shelf_root_gusset_width', 'dock_side_wall', 'Dock', 'Internal gusset width contained within each guide root'),
     ('retention_clearance', '0.3 mm', 'Fit', 'Reserved retention feature clearance'),
     ('guide_depth', 'pocket_depth', 'Dock', 'Side-guide and shelf depth equals the usable tablet pocket depth'),
     ('guide_center_x', 'device_width / 2 + pocket_clearance_x + dock_side_wall / 2', 'Dock', 'Side-guide centre magnitude'),
@@ -82,7 +82,6 @@ PARAMETERS = (
     ('guide_height', 'device_height + 2 * pocket_clearance_y - dock_side_wall', 'Dock', 'Side-guide height below the open top edge'),
     ('shelf_center_y', '-device_height / 2 - pocket_clearance_y - lower_support_thickness / 2', 'Dock', 'Lower support centre below TabletEnvelope'),
     ('shelf_width', 'device_width + 2 * pocket_clearance_x', 'Dock', 'Lower support width between guides'),
-    ('shelf_reinforcement_center_y', 'shelf_center_y + lower_support_thickness / 2 - shelf_hidden_structural_thickness', 'Dock', 'Root-circle centre keeps its top at the accepted shelf top datum'),
     ('retention_concept_height', '12 mm', 'Dock', 'Non-final upper side detent study height'),
     ('retention_concept_width', '1 mm', 'Dock', 'Non-final detent width outside the tablet envelope'),
     ('retention_center_x', 'device_width / 2 + retention_concept_width / 2', 'Dock', 'Non-final detent reaches the TabletEnvelope boundary without crossing it'),
@@ -427,14 +426,10 @@ def _validate_iteration_2_geometry(design):
         raise RuntimeError('Retention concept width must be positive.')
     if _mm(design, 'shelf_hidden_structural_thickness') < 3 / 10:
         raise RuntimeError('Lower shelf hidden structural thickness must be at least 3.0 mm.')
-    if _mm(design, 'shelf_root_fillet_radius') < 3 / 10:
-        raise RuntimeError('Lower shelf hidden root fillets must be at least R3.0 mm.')
-    shelf_top = (_mm(design, 'shelf_center_y') +
-                 _mm(design, 'lower_support_thickness') / 2)
-    reinforcement_top = (_mm(design, 'shelf_reinforcement_center_y') +
-                         _mm(design, 'shelf_root_fillet_radius'))
-    if reinforcement_top > shelf_top + tolerance:
-        raise RuntimeError('Hidden shelf reinforcement must not extend above the accepted shelf top datum.')
+    if _mm(design, 'shelf_hidden_structural_thickness') > _mm(design, 'lower_support_thickness') + tolerance:
+        raise RuntimeError('Hidden shelf gussets must remain within the accepted shelf height.')
+    if _mm(design, 'shelf_root_gusset_width') > _mm(design, 'dock_side_wall') + tolerance:
+        raise RuntimeError('Hidden shelf gussets must remain within the DockBody side-guide outline.')
     if abs(_mm(design, 'usb_downward_relief') - 0.03) > tolerance:
         raise RuntimeError('USB-C pocket must retain exactly 0.30 mm additional downward relief.')
     if abs(_mm(design, 'usb_rear_relief') - 0.02) > tolerance:
@@ -482,6 +477,18 @@ def _validate_iteration_2_geometry(design):
     slot_right = _mm(design, 'speaker_slot_center_x') + _mm(design, 'speaker_slot_width') / 2
     if slot_left < shelf_left or slot_right > shelf_right:
         raise RuntimeError('Speaker slot must be contained within the lower shelf.')
+    cable_left = _mm(design, 'cable_pocket_center_x') - _mm(design, 'cable_pocket_width') / 2
+    cable_right = _mm(design, 'cable_pocket_center_x') + _mm(design, 'cable_pocket_width') / 2
+    if not (cable_right < slot_left or cable_left > slot_right):
+        raise RuntimeError('USB-C cable channel must not collide with the lower speaker opening.')
+    cable_top = (_mm(design, 'cable_pocket_center_y') +
+                 _mm(design, 'cable_pocket_relief_run_depth') / 2)
+    button_bottom = (_mm(design, 'button_relief_center_y') -
+                     _mm(design, 'button_relief_height') / 2)
+    camera_bottom = (_mm(design, 'camera_keepout_center_y') -
+                     _mm(design, 'camera_keepout_height') / 2)
+    if cable_top > min(button_bottom, camera_bottom) + tolerance:
+        raise RuntimeError('USB-C cable channel must remain below the camera and button keep-outs.')
 
 
 def _dual_lock_measurement(design, required):
@@ -597,33 +604,19 @@ def _cut_cable_profile(component, design, plane, center_y, distance, name):
 
 
 def _add_shelf_root_reinforcement(component, design):
-    """Join R3 roots whose top is tangent to, and never above, the shelf top."""
+    """Join internal gussets wholly inside the accepted shelf/guide overlap."""
     for side, center_x in (
             ('Right', 'guide_center_x'), ('Left', 'guide_center_x_left')):
-        evaluated_center_x = _mm(design, center_x)
-        evaluated_center_y = _mm(design, 'shelf_reinforcement_center_y')
-        evaluated_radius = _mm(design, 'shelf_root_fillet_radius')
         sketch = component.sketches.add(component.xYConstructionPlane)
-        sketch.name = side + ' hidden lower-shelf root fillet'
-        circle = sketch.sketchCurves.sketchCircles.addByCenterRadius(
-            adsk.core.Point3D.create(
-                evaluated_center_x, evaluated_center_y, 0),
-            evaluated_radius)
-        # Fusion rejects a diameter dimension whose text point is exactly at
-        # the circle centre, so place the label clear of the reinforced root.
-        diameter_text_point = adsk.core.Point3D.create(
-            evaluated_center_x + 1.5 * evaluated_radius,
-            evaluated_center_y + 1.5 * evaluated_radius,
-            0)
-        diameter = sketch.sketchDimensions.addDiameterDimension(
-            circle, diameter_text_point)
-        _set_dimension_expression(
-            diameter, '2 * shelf_root_fillet_radius')
+        sketch.name = side + ' hidden lower-shelf internal gusset'
+        profile = _centered_rectangle_profile(
+            sketch, design, 'shelf_root_gusset_width',
+            'shelf_hidden_structural_thickness', center_x, 'shelf_center_y')
         reinforcement = _extrude(
-            component, sketch.profiles.item(0), 'guide_depth',
+            component, profile, 'guide_depth',
             adsk.fusion.FeatureOperations.JoinFeatureOperation)
-        reinforcement.name = side + ' hidden R3 shelf-root reinforcement'
-        reinforcement.bodies.item(0).name = side + ' hidden shelf root fillet'
+        reinforcement.name = side + ' internal shelf-root gusset'
+        reinforcement.bodies.item(0).name = side + ' hidden shelf root gusset'
 
 
 def _validate_timeline_health(design):

@@ -8,7 +8,7 @@
 
 - The physical clearance series selects 0.20 mm per side for the tablet pocket in X and Y. All 0.2, 0.3, and 0.4 mm coupon definitions and manufacturing records remain available.
 - The physical corner series selects an 8.5 mm device corner radius. R8, R8.5, and R9 coupons remain available as traceable validation articles.
-- The accepted lower-shelf width (`device_width + 2 * pocket_clearance_x`), top datum, and 3.0 mm functional height are preserved. The 3.0 mm hidden structural-thickness parameter drives the joined R3 root geometry; each reinforcement circle is positioned below the seat with its top tangent to, and never above, the accepted shelf top datum.
+- The accepted lower-shelf width (`device_width + 2 * pocket_clearance_x`), top datum, and 3.0 mm functional height are preserved. The 3.0 mm hidden structural-thickness parameter drives joined internal gussets contained entirely within the existing shelf/guide overlap and DockBody outline.
 - Connector fit requires 0.30 mm additional downward relief and 0.20 mm additional rear/depth relief. The edge-based horizontal centre and 18 mm pocket width are unchanged.
 
 ## Load path and cable constraint
