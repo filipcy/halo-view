@@ -70,7 +70,7 @@ The visible Faceplate bezel is fixed at **6 mm**. A 7 mm alternative was visuall
 
 ## ADR-010 — Initial body clearance: +0.3 mm per side
 
-**Status:** Accepted for Rev A validation  
+**Status:** Superseded by ADR-017 after physical testing
 **Date:** 2026-08-01
 
 The initial tablet pocket uses a nominal clearance of **+0.3 mm per side**. This value is a prototype assumption and must be validated with a fit coupon or first prototype before production release.
@@ -116,3 +116,14 @@ The complete installed product targets approximately **18 mm total projection fr
 **Date:** 2026-08-01
 
 The visible Faceplate finish is fully matte rather than satin or gloss. Material, print orientation and finishing method must minimise layer glare, fingerprints and reflections in the hallway mirror.
+
+## ADR-017 — Rev A PETG physical-fit corrections
+
+**Status:** Accepted
+**Date:** 2026-08-06
+
+Physical coupon testing selects **0.20 mm nominal tablet clearance per side**; 0.30 mm and 0.40 mm were too loose. It also selects **R8.5** as the balanced device corner radius although R8 and R9 fit. All tested clearance and radius coupon variants remain in the generator for traceability.
+
+The approximately 1 mm total lower-shelf lateral clearance is accepted and must not be reduced. The shelf coupon's break after a fall onto the floor is a robustness observation, not a fit failure: shelf width and height remain fixed while hidden structure gains a 3.0 mm minimum, joined transitions, and generous root fillets.
+
+The tested straight USB-C cable keeps its accepted horizontal alignment and pocket width. The pocket gains 0.30 mm relief below the plug/cable and 0.20 mm rear/depth relief so the connector is not loaded; the shelf, not the connector, supports the tablet. A 90-degree cable is not mandatory.

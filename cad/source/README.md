@@ -16,6 +16,12 @@ A failed run can leave partial generated components behind. The generator is not
 
 ## Measurement blocker
 
-`dual_lock_measured_engaged_thickness` defaults to `0 mm`, meaning **NOT MEASURED**. It is labeled `REQUIRED PHYSICAL MEASUREMENT — exact selected Dual Lock pair`. Do not substitute a catalog claim or estimate. The wall coupon and all full-size exports remain blocked until the exact selected, mated pair is measured and the derived recess leaves positive structural backing.
+`dual_lock_engaged_thickness` defaults to `0 mm`, meaning **NOT MEASURED**. It is labeled `REQUIRED PHYSICAL MEASUREMENT — exact selected Dual Lock pair`. Do not substitute a catalog claim or estimate. The wall coupon and all full-size exports remain blocked until the exact selected, mated pair is measured and the derived recess leaves positive structural backing.
 
 Follow `cad/reviews/HALO_Dock_Rev_A_Sprint_3.md`. No Fusion execution, export, slicer review, or physical validation was performed in this repository environment.
+
+## Physical fit selection
+
+The current source-of-truth values are the physically selected 0.20 mm nominal per-side clearance and R8.5 device corner radius. The 0.20/0.30/0.40 clearance gauges and R8/R8.5/R9 corner coupons remain available; their presence does not make rejected alternatives active geometry. The full DockBody uses explicit `usb_pocket_vertical_relief_delta = 0.30 mm` and `usb_pocket_depth_relief_delta = 0.20 mm`, preserving tested straight-cable alignment and width. The accepted shelf width and support height are unchanged; hidden structure is at least 3.0 mm and receives root fillets.
+
+See the [physical fit validation review](../reviews/HALO_Dock_Rev_A_Physical_Fit_Validation.md). Fusion native execution, timeline rebuild, interference analysis, F3D/STEP/STL generation, and visual inspection remain unverified and are release blockers.

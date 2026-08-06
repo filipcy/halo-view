@@ -246,3 +246,11 @@ If a decision improves engineering but hurts appearance:
 think twice.
 
 HALO must always feel like architecture, not electronics.
+
+## Rev A physical fit state — 2026-08-06
+
+Supplier PETG coupons (printer reported as Bambu Lab X2D) close the tablet fit choices: 0.20 mm nominal clearance per side and R8.5 device corners are selected. The 0.30/0.40 mm clearances are rejected as too loose, while R8 and R9 remain valid historical coupon cases. The existing shelf width, its approximately 1 mm total lateral clearance, and its support height remain accepted; the floor-drop break drives hidden root strengthening only. USB-C X alignment and width remain accepted for the straight cable, with +0.30 mm downward relief and +0.20 mm rear relief required.
+
+Accepted architectural intent remains unchanged: 6.0 mm bezel, 0.5 mm screen lip, 0.8 mm recess, 1.5 mm wall shadow gap, approximately 18 mm projection, open-top service path, matte black exterior, 3M Dual Lock mounting with a separate engaged-thickness parameter, signed Iteration 2 left/right datums, camera keep-out and button relief. The 3.5 mm jack and microSD access remain intentionally excluded.
+
+Native full-model Fusion execution, timeline rebuild, interference analysis, F3D/STEP/STL exports, and visual inspection are still required before release.

@@ -1,7 +1,7 @@
-"""HALO Dock Rev A Sprint 3 parametric generator for Autodesk Fusion 360.
+"""HALO Dock Rev A physical-fit-corrected generator for Autodesk Fusion 360.
 
-Sprint 3 adds coupon-first exports and measurement-gated wall-mount geometry to
-the accepted Iteration 2 model.  It does not constitute a manufacturing release.
+This revision applies the accepted PETG coupon results to the Iteration 2 model.
+It remains measurement gated and does not constitute a manufacturing release.
 Run this script from Fusion 360's Scripts and Add-Ins dialog.
 """
 
@@ -34,7 +34,9 @@ COUPON_PART_IDS = {
     '0.2': 'HALO_Dock_Rev_A_Clearance_0_2mm',
     '0.3': 'HALO_Dock_Rev_A_Clearance_0_3mm',
     '0.4': 'HALO_Dock_Rev_A_Clearance_0_4mm',
-    'corner': 'HALO_Dock_Rev_A_Faceplate_Open_Corner_L',
+    'corner_8': 'HALO_Dock_Rev_A_Faceplate_Open_Corner_R8',
+    'corner_8_5': 'HALO_Dock_Rev_A_Faceplate_Open_Corner_R8_5_SELECTED',
+    'corner_9': 'HALO_Dock_Rev_A_Faceplate_Open_Corner_R9',
     'guide': 'HALO_Dock_Rev_A_Side_Guide_Lower_Shelf',
     'wall_right': 'HALO_Dock_Rev_A_Wall_Stack_Shadow_Gap_Right',
     'wall_left': 'HALO_Dock_Rev_A_Wall_Stack_Shadow_Gap_Left',
@@ -48,13 +50,13 @@ PARAMETERS = (
     ('device_width', '125 mm', 'Device', 'Bare tablet width; validate by caliper'),
     ('device_height', '211 mm', 'Device', 'Bare tablet height; validate by caliper'),
     ('device_thickness', '8 mm', 'Device', 'Maximum bare tablet thickness; validate by caliper'),
-    ('device_corner_radius', '18 mm', 'Device', 'Approximate traced corner radius'),
+    ('device_corner_radius', '8.5 mm', 'Device', 'SELECTED by physical fit: balanced R8/R8.5/R9 result'),
     # Accepted Rev A interface values.
     ('bezel_width', '6 mm', 'Faceplate', 'Visible bezel around tablet'),
     ('inner_lip_overlap', '0.5 mm', 'Faceplate', 'Target overlap; verify against active display'),
     ('screen_recess', '0.8 mm', 'Faceplate', 'Display recess from Faceplate plane'),
-    ('pocket_clearance_x', '0.3 mm', 'Fit', 'Clearance per tablet side'),
-    ('pocket_clearance_y', '0.3 mm', 'Fit', 'Clearance per tablet end'),
+    ('pocket_clearance_x', '0.2 mm', 'Fit', 'SELECTED physical per-side tablet clearance'),
+    ('pocket_clearance_y', '0.2 mm', 'Fit', 'Selected tablet end clearance'),
     ('pocket_clearance_z', '0.3 mm', 'Fit', 'Clearance behind tablet'),
     # Open engineering parameters selected for the Iteration 2 model.
     ('front_thickness', '2.4 mm', 'Faceplate', 'Prototype Faceplate structural thickness'),
@@ -62,7 +64,8 @@ PARAMETERS = (
     ('total_projection_target', '18 mm', 'Dock', 'Packaging target from tile to front face'),
     ('dock_back_thickness', 'total_projection_target - wall_shadow_gap - device_thickness - screen_recess', 'Dock', 'Derived rear depth that closes the installed projection stack'),
     ('dock_side_wall', '3 mm', 'Dock', 'Prototype perimeter wall width'),
-    ('lower_support_thickness', '3 mm', 'Dock', 'Reserved lower tablet support thickness'),
+    ('lower_support_thickness', '3 mm', 'Dock', 'Validated minimum hidden structural thickness'),
+    ('shelf_root_fillet_radius', '1.5 mm', 'Dock', 'Generous hidden shelf/body root fillet'),
     ('retention_clearance', '0.3 mm', 'Fit', 'Reserved retention feature clearance'),
     ('guide_depth', 'device_thickness', 'Dock', 'Side-guide and shelf depth from tablet rear datum'),
     ('guide_center_x', 'device_width / 2 + pocket_clearance_x + dock_side_wall / 2', 'Dock', 'Side-guide centre magnitude'),
@@ -78,7 +81,7 @@ PARAMETERS = (
     ('retention_center_y', 'device_height / 2 - retention_concept_height / 2', 'Dock', 'Non-final side detent location below the open top'),
     ('dock_center_x', '0 mm', 'Dock', 'Shared horizontal centre datum for DockBody features'),
     # Sprint 3 coupons.
-    ('coupon_guide_clearance', '0.3 mm', 'Coupons', 'Selected per-side clearance for the guide/shelf coupon'),
+    ('coupon_guide_clearance', 'pocket_clearance_x', 'Coupons', 'Selected per-side clearance for the guide/shelf coupon'),
     ('coupon_guide_length', '30 mm', 'Coupons', 'Short guide engagement length; tablet inserts through open top'),
     ('coupon_guide_inner_width', 'device_width + 2 * coupon_guide_clearance', 'Coupons', 'Actual tablet pocket width between coupon rails'),
     ('coupon_guide_center_x', 'coupon_guide_inner_width / 2 + dock_side_wall / 2', 'Coupons', 'Right guide coupon rail centre magnitude'),
@@ -99,8 +102,8 @@ PARAMETERS = (
     ('dual_lock_center_x', 'device_width / 2 + pocket_clearance_x + dock_side_wall - dual_lock_pad_edge_offset - dual_lock_pad_width / 2', 'Wall interface', 'Hidden mounting field centre magnitude'),
     ('dual_lock_center_x_left', '-dual_lock_center_x', 'Wall interface', 'Left hidden mounting field centre'),
     ('dual_lock_center_y', '0 mm', 'Wall interface', 'Hidden mounting field vertical centre'),
-    ('dual_lock_measured_engaged_thickness', '0 mm', 'Wall interface', 'REQUIRED PHYSICAL MEASUREMENT — exact selected Dual Lock pair; 0 mm means NOT MEASURED'),
-    ('dual_lock_recess_depth', 'dual_lock_measured_engaged_thickness - wall_shadow_gap', 'Wall interface', 'Measured stack excess received by the DockBody rear recess'),
+    ('dual_lock_engaged_thickness', '0 mm', 'Wall interface', 'REQUIRED PHYSICAL MEASUREMENT — exact selected Dual Lock pair; 0 mm means NOT MEASURED'),
+    ('dual_lock_recess_depth', 'dual_lock_engaged_thickness - wall_shadow_gap', 'Wall interface', 'Measured stack excess received by the DockBody rear recess'),
     ('dual_lock_remaining_back_thickness', 'dock_back_thickness - dual_lock_recess_depth', 'Wall interface', 'Reported structural backing thickness below each recess'),
     ('wall_coupon_margin', '6 mm', 'Coupons', 'Open shadow-gap witness area around each Dual Lock pad'),
     ('wall_coupon_field_spacing', '8 mm', 'Coupons', 'Open separation between symmetric wall coupon fields'),
@@ -114,7 +117,14 @@ PARAMETERS = (
     ('usb_opening_height', '2 mm', 'Reserved', 'Approximate port opening height'),
     ('usb_connector_width', '12 mm', 'Reserved', 'Placeholder cable envelope; not modeled'),
     ('usb_connector_height', '7 mm', 'Reserved', 'Placeholder cable envelope; not modeled'),
-    ('usb_connector_depth', '20 mm', 'Reserved', 'Placeholder cable envelope; not modeled'),
+    ('usb_connector_depth', '20 mm', 'Cable pocket', 'Tested straight-cable body envelope'),
+    ('usb_pocket_vertical_relief_delta', '0.30 mm', 'Cable pocket', 'Physical correction: additional usable relief below connector'),
+    ('usb_pocket_depth_relief_delta', '0.20 mm', 'Cable pocket', 'Physical correction: additional rear relief behind connector'),
+    ('usb_pocket_width', 'usb_connector_width', 'Cable pocket', 'Accepted physical pocket width; horizontal size unchanged'),
+    ('usb_pocket_height', 'usb_connector_height + usb_pocket_vertical_relief_delta', 'Cable pocket', 'Connector envelope plus downward-only relief'),
+    ('usb_pocket_center_x', '-device_width / 2 + usb_port_datum_x', 'Cable pocket', 'Accepted signed horizontal USB datum'),
+    ('usb_pocket_center_y', '-device_height / 2 + usb_port_datum_y - usb_connector_height / 2 - usb_pocket_vertical_relief_delta / 2', 'Cable pocket', 'Keeps port alignment and adds relief below only'),
+    ('usb_pocket_cut_depth', 'dock_back_thickness + usb_pocket_depth_relief_delta', 'Cable pocket', 'Rear clearance through backing plus tested depth relief'),
     ('camera_keepout_width', '18 mm', 'Keep-outs', 'Placeholder; requires measurement'),
     ('camera_keepout_height', '18 mm', 'Keep-outs', 'Placeholder; requires measurement'),
     ('camera_keepout_depth', '2 mm', 'Keep-outs', 'Placeholder; requires measurement'),
@@ -134,7 +144,7 @@ def _set_parameters(design):
         if existing:
             # Never erase a physical measurement when the operator reruns the
             # generator to create the now-unblocked wall coupon.
-            if name != 'dual_lock_measured_engaged_thickness':
+            if name != 'dual_lock_engaged_thickness':
                 existing.expression = expression
             existing.comment = comment
         else:
@@ -327,10 +337,13 @@ def _centered_rectangle_profile(
         vertical,
         adsk.core.Point3D.create(cx - width, cy / 2, 0),
     )
-    # Distance dimensions are unsigned; the initial point quadrant preserves
-    # direction while abs() keeps a legal expression on every side.
-    _set_dimension_expression(x_dim, f'abs(({center_x}) - ({width_name}) / 2)')
-    _set_dimension_expression(y_dim, f'abs(({center_y}) - ({height_name}) / 2)')
+    # Fusion distance dimensions are unsigned. Choose the magnitude expression
+    # from the seeded quadrant while retaining the signed centre parameter;
+    # never fold left/right datums together with abs().
+    x_offset = f'({center_x}) - ({width_name}) / 2'
+    y_offset = f'({center_y}) - ({height_name}) / 2'
+    _set_dimension_expression(x_dim, x_offset if cx - width / 2 >= 0 else f'-({x_offset})')
+    _set_dimension_expression(y_dim, y_offset if cy - height / 2 >= 0 else f'-({y_offset})')
     return sketch.profiles.item(sketch.profiles.count - 1)
 
 
@@ -398,11 +411,17 @@ def _validate_iteration_2_geometry(design):
         raise RuntimeError('coupon_guide_clearance must be non-negative.')
     if _mm(design, 'coupon_corner_arm_length') <= _mm(design, 'bezel_width'):
         raise RuntimeError('Open corner coupon arms must extend beyond the bezel.')
+    if _mm(design, 'lower_support_thickness') < 0.3:
+        raise RuntimeError('Hidden lower-shelf structure must be at least 3.0 mm thick.')
+    if _mm(design, 'usb_pocket_vertical_relief_delta') < 0.03:
+        raise RuntimeError('USB pocket must retain the validated 0.30 mm downward relief correction.')
+    if _mm(design, 'usb_pocket_depth_relief_delta') < 0.02:
+        raise RuntimeError('USB pocket must retain the validated 0.20 mm rear relief correction.')
 
 
 def _dual_lock_measurement(design, required):
     """Validate the selected physical wall stack; zero explicitly means unknown."""
-    measured = _mm(design, 'dual_lock_measured_engaged_thickness')
+    measured = _mm(design, 'dual_lock_engaged_thickness')
     shadow_gap = _mm(design, 'wall_shadow_gap')
     dock_back = _mm(design, 'dock_back_thickness')
     if measured <= 0:
@@ -569,6 +588,21 @@ def _build_dock_body(design, root):
     feature.name = 'Iteration 2 projection-controlled backing'
     feature.bodies.item(0).name = 'HALO DockBody Rev A - backing'
 
+    # The accepted X datum and width are unchanged. This rear cut is shifted
+    # downward only and passes through the backing by the explicit depth delta,
+    # preventing the straight plug body or cable bend from loading the port.
+    usb_sketch = component.sketches.add(component.xYConstructionPlane)
+    usb_sketch.name = 'USB-C straight-cable pocket - physical fit correction'
+    usb_pocket = _extrude(
+        component,
+        _centered_rectangle_profile(
+            usb_sketch, design, 'usb_pocket_width', 'usb_pocket_height',
+            'usb_pocket_center_x', 'usb_pocket_center_y'),
+        '-usb_pocket_cut_depth',
+        adsk.fusion.FeatureOperations.CutFeatureOperation,
+    )
+    usb_pocket.name = 'USB-C rear pocket - +0.30 mm down, +0.20 mm rear'
+
     # A measured stack thicker than the visible gap is received by two
     # discrete rear pockets.  The selected Dual Lock then ends on the pocket
     # floor, providing wall -> Dual Lock -> DockBody contact with no air gap.
@@ -609,6 +643,7 @@ def _build_dock_body(design, root):
                 'guide_center_y',
             ),
             'guide_depth',
+            adsk.fusion.FeatureOperations.JoinFeatureOperation,
         )
         guide.name = side + ' side guide - open top'
         guide.bodies.item(0).name = side + ' side guide'
@@ -626,9 +661,28 @@ def _build_dock_body(design, root):
             'shelf_center_y',
         ),
         'guide_depth',
+        adsk.fusion.FeatureOperations.JoinFeatureOperation,
     )
     shelf.name = 'Lower support shelf'
     shelf.bodies.item(0).name = 'Lower tablet support shelf'
+
+    # Fillet the hidden shelf-to-backing root perimeter. Joining guides and
+    # shelf to the backing removes thin independent cantilevers; the visible
+    # front edge stays geometrically minimal and the accepted shelf width stays
+    # unchanged.
+    root_edges = adsk.core.ObjectCollection.create()
+    if shelf.startFaces.count:
+        for edge in shelf.startFaces.item(0).edges:
+            root_edges.add(edge)
+    if root_edges.count:
+        fillet_input = component.features.filletFeatures.createInput()
+        fillet_input.addConstantRadiusEdgeSet(
+            root_edges,
+            adsk.core.ValueInput.createByString('shelf_root_fillet_radius'),
+            True,
+        )
+        root_fillet = component.features.filletFeatures.add(fillet_input)
+        root_fillet.name = 'Hidden lower-shelf root fillets'
 
     for side, center_x in (
         ('Right', 'retention_center_x'),
@@ -677,16 +731,16 @@ def _build_wall_interface(design, root):
                 center_x,
                 'dual_lock_center_y',
             ),
-            'dual_lock_measured_engaged_thickness',
+            'dual_lock_engaged_thickness',
         )
         field.name = side + ' selected 3M Dual Lock engaged envelope'
         field.bodies.item(0).name = side + ' measured mounting stack - NOT PRINTABLE'
     return component
 
 
-def _open_corner_l_profile(sketch, design, band_expression):
+def _open_corner_l_profile(sketch, design, band_expression, radius_parameter):
     """Create one closed, origin-datumed L with equal parameter-driven arms."""
-    radius = _mm(design, 'device_corner_radius') + _mm(design, 'bezel_width')
+    radius = _mm(design, radius_parameter) + _mm(design, 'bezel_width')
     arm = _mm(design, 'coupon_corner_arm_length')
     # Both current band expressions are simple sums/differences of known
     # parameters; use their evaluated value only to seed the constrained sketch.
@@ -755,7 +809,7 @@ def _open_corner_l_profile(sketch, design, band_expression):
     _set_dimension_expression(band_dimension, band_expression)
     outer_radial = dims.addRadialDimension(
         outer_arc, adsk.core.Point3D.create(-radius, radius / 2, 0))
-    _set_dimension_expression(outer_radial, 'device_corner_radius + bezel_width')
+    _set_dimension_expression(outer_radial, radius_parameter + ' + bezel_width')
 
     if sketch.profiles.count != 1:
         raise RuntimeError(
@@ -764,14 +818,21 @@ def _open_corner_l_profile(sketch, design, band_expression):
     return sketch.profiles.item(0)
 
 
-def _build_faceplate_corner_coupon(design, root):
-    component = _new_component(root, 'Coupon_Faceplate_Open_Corner_L')
-    component.description = 'Open L coupon: real outer radius, top/side bezel, lip, recess, pocket clearance, and rear skirt.'
+def _build_faceplate_corner_coupon(design, root, radius_text):
+    safe = radius_text.replace('.', '_')
+    radius_parameter = 'coupon_corner_radius_' + safe
+    _ensure_parameter(
+        design, radius_parameter, radius_text + ' mm',
+        ('SELECTED corner-radius coupon' if radius_text == '8.5'
+         else 'Historical corner-radius coupon'))
+    component = _new_component(root, 'Coupon_Faceplate_Open_Corner_R' + safe)
+    component.description = ('Open L radius coupon; R8.5 is selected, while '
+                             'R8 and R9 remain for physical-test traceability.')
     lip_plane = _offset_plane(component, 'device_thickness', 'Coupon lip display datum')
     lip_sketch = component.sketches.add(lip_plane)
     lip_sketch.name = 'OPEN L lip profile - static validation forbids ring loops'
     lip = _extrude(component, _open_corner_l_profile(
-        lip_sketch, design, 'bezel_width + inner_lip_overlap'), 'screen_recess')
+        lip_sketch, design, 'bezel_width + inner_lip_overlap', radius_parameter), 'screen_recess')
     lip.name = 'Open L visible lip and front surface'
     skirt_plane = _offset_plane(
         component, 'device_thickness + screen_recess - front_thickness',
@@ -779,7 +840,7 @@ def _build_faceplate_corner_coupon(design, root):
     skirt_sketch = component.sketches.add(skirt_plane)
     skirt_sketch.name = 'OPEN L rear skirt profile - pocket side remains open'
     skirt = _extrude(component, _open_corner_l_profile(
-        skirt_sketch, design, 'bezel_width - pocket_clearance_x'),
+        skirt_sketch, design, 'bezel_width - pocket_clearance_x', radius_parameter),
         'front_thickness - screen_recess',
         adsk.fusion.FeatureOperations.JoinFeatureOperation)
     skirt.name = 'Open L rear perimeter skirt and pocket clearance witness'
@@ -943,7 +1004,8 @@ def _export_outputs(design, coupons, faceplate, dock_body):
         # Each tuple is one printable component and one controlled Part ID.
         # Full parts and root/reference geometry are absent from this list.
         for component, part_id in coupons:
-            if part_id == COUPON_PART_IDS['corner']:
+            if part_id in (COUPON_PART_IDS['corner_8'], COUPON_PART_IDS['corner_8_5'],
+                           COUPON_PART_IDS['corner_9']):
                 _validate_open_corner_coupon(component, design)
             _export_printable_part(export_manager, component, output_dir, part_id)
     else:
@@ -979,8 +1041,9 @@ def run(context):
         for clearance in ('0.2', '0.3', '0.4'):
             coupons.append((_build_clearance_coupon(design, root, clearance),
                 COUPON_PART_IDS[clearance]))
-        coupons.append((_build_faceplate_corner_coupon(design, root),
-            COUPON_PART_IDS['corner']))
+        for radius, part_key in (('8', 'corner_8'), ('8.5', 'corner_8_5'), ('9', 'corner_9')):
+            coupons.append((_build_faceplate_corner_coupon(design, root, radius),
+                COUPON_PART_IDS[part_key]))
         coupons.append((_build_guide_shelf_coupon(design, root),
             COUPON_PART_IDS['guide']))
         if _dual_lock_measurement(design, required=False):
