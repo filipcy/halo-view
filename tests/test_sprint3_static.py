@@ -130,6 +130,178 @@ class Sprint3StaticGuards(unittest.TestCase):
         self.assertIn('bounds.maxPoint.y - bounds.minPoint.y', guard)
         self.assertIn('_validate_open_corner_coupon(component, design)', export)
 
+    def test_three_explicit_corner_radius_candidates_are_unique_and_gated(self):
+        part_ids = assignment('COUPON_PART_IDS')
+        corner_ids = [part_ids['corner_R8_0'], part_ids['corner_R8_5'], part_ids['corner_R9_0']]
+        self.assertEqual(len(corner_ids), len(set(corner_ids)))
+        for token in ('R8_0', 'R8_5', 'R9_0'):
+            self.assertIn(token, part_ids['corner_' + token])
+            self.assertIn("('coupon_corner_radius_" + token, SOURCE)
+        self.assertIn("('device_corner_radius', '8.5 mm'", SOURCE)
+        self.assertIn('PROVISIONAL AND UNVERIFIED', SOURCE)
+        self.assertFalse(assignment('FULL_SIZE_RELEASE_GATES')['corner_radius_selected'])
+        run = ast.unparse(function('run'))
+        self.assertIn("('R8_0', 'coupon_corner_radius_R8_0')", run)
+        self.assertIn("('R8_5', 'coupon_corner_radius_R8_5')", run)
+        self.assertIn("('R9_0', 'coupon_corner_radius_R9_0')", run)
+        self.assertNotIn('device_corner_radius).expression', run)
+
+    def test_pocket_depth_drives_full_stack_and_coupon_parity_guard(self):
+        self.assertIn("('pocket_depth', 'device_thickness + 2 * pocket_clearance_z'", SOURCE)
+        self.assertIn("('guide_depth', 'pocket_depth'", SOURCE)
+        self.assertIn('total_projection_target - wall_shadow_gap - pocket_depth - screen_recess', SOURCE)
+        validate = ast.unparse(function('_validate_iteration_2_geometry'))
+        self.assertIn('clearance_z <= 0', validate)
+        self.assertIn('pocket_depth - expected_pocket_depth', validate)
+        self.assertIn('pocket_depth - selected_slot_width', validate)
+        faceplate = ast.unparse(function('_build_faceplate'))
+        corner = ast.unparse(function('_build_faceplate_corner_coupon'))
+        for geometry in (faceplate, corner):
+            self.assertIn("'pocket_depth'", geometry)
+            self.assertIn('pocket_depth + screen_recess - front_thickness', geometry)
+
+    def test_dashboard_keepouts_are_edge_based_and_physically_guarded(self):
+        for expression in (
+            "-device_width / 2 + cable_pocket_edge_x",
+            "-device_width / 2 + camera_keepout_edge_x",
+            "-device_height / 2 + camera_keepout_edge_y",
+            "-device_width / 2 + speaker_slot_edge_x",
+        ):
+            self.assertIn(expression, SOURCE)
+        dock = ast.unparse(function('_build_dock_body'))
+        for feature in ('camera_keepout_depth', 'button_relief_depth',
+                        'cable_pocket_center_y', '_cut_speaker_slot'):
+            self.assertIn(feature, dock)
+        validate = ast.unparse(function('_validate_iteration_2_geometry'))
+        for message in ('Camera Keep-out', 'Button Relief', 'Cable Pocket', 'Speaker slot'):
+            self.assertIn(message, validate)
+        for prohibited in ('jack_opening', 'microsd', 'microphone_opening'):
+            self.assertNotIn(prohibited, SOURCE.lower())
+
+    def test_cable_cuts_use_proven_rectangular_profile(self):
+        cutter = ast.unparse(function('_cut_cable_profile'))
+        self.assertIn('_centered_rectangle_profile', cutter)
+        self.assertNotIn('_centered_rounded_rectangle_profile', SOURCE)
+        self.assertNotIn('cable_pocket_corner_radius', SOURCE)
+        for builder in ('_build_faceplate', '_build_dock_body',
+                        '_build_guide_shelf_coupon',
+                        '_build_faceplate_cable_coupon'):
+            self.assertIn('_cut_cable_profile', ast.unparse(function(builder)))
+
+    def test_no_cable_reference_body_or_temporary_box_remains(self):
+        self.assertNotIn('OrientedBoundingBox3D', SOURCE)
+        self.assertNotIn('createBox', SOURCE)
+        self.assertNotIn('TemporaryBRepManager', SOURCE)
+        self.assertNotIn("_new_component(root, 'CableEnvelope')", SOURCE)
+        self.assertNotIn('def _build_cable_envelope', SOURCE)
+
+    def test_timeline_health_blocks_errors_and_warnings(self):
+        health = ast.unparse(function('_validate_timeline_health'))
+        self.assertIn('ErrorFeatureHealthState', health)
+        self.assertIn('WarningFeatureHealthState', health)
+        self.assertIn('entity.errorOrWarningMessage', health)
+        self.assertIn('component.name', health)
+        self.assertIn('entity.name', health)
+        export = ast.unparse(function('_export_outputs'))
+        self.assertIn('design.computeAll()', export)
+        self.assertIn('_validate_timeline_health(design)', export)
+        self.assertNotIn('_validate_cable_clearance', export)
+
+    def test_cable_reference_cannot_enter_export_lists(self):
+        export = ast.unparse(function('_export_outputs'))
+        run = ast.unparse(function('run'))
+        self.assertNotIn('cable_envelope', export)
+        self.assertNotIn('CableEnvelope', run)
+        self.assertNotIn('_export_printable_part(export_manager, envelope_body', SOURCE)
+
+    def test_every_coupon_is_solid_validated_before_export(self):
+        validator = ast.unparse(function('_validate_printable_coupon'))
+        export = ast.unparse(function('_export_outputs'))
+        self.assertIn('_validate_printable_coupon(component, part_id)', export)
+        for guard in ('body_count != 1', 'not is_valid', 'not is_solid',
+                      'volume <= 0', 'faces <= 0', 'edges <= 0',
+                      'vertices <= 0', 'extent <= 0'):
+            self.assertIn(guard, validator)
+        self.assertIn('body.preciseBoundingBox', validator)
+        self.assertIn("COUPON_PART_IDS['faceplate_cable']", validator)
+        self.assertIn("'faceplate_cable_coupon_width'", validator)
+        self.assertIn("COUPON_PART_IDS['guide']", validator)
+        self.assertIn("'coupon_shelf_width'", validator)
+        self.assertIn("'coupon_fit_outer_width_' + safe", validator)
+        self.assertIn("'lower_support_thickness'", validator)
+        self.assertIn('existing_bodies.append', validator)
+        self.assertIn('existing.name', validator)
+        self.assertIn('existing.volume', validator)
+        coupon_branch = next(
+            n for n in ast.walk(function('_export_outputs'))
+            if isinstance(n, ast.If) and
+            'EXPORT_MODE == COUPONS_ONLY' in ast.unparse(n.test))
+        branch = '\n'.join(ast.unparse(node) for node in coupon_branch.body)
+        self.assertNotIn("FULL_SIZE_PART_IDS['faceplate']", branch)
+        self.assertNotIn("FULL_SIZE_PART_IDS['dock_body']", branch)
+
+    def test_clearance_validation_uses_x_vertices_and_functional_y_range(self):
+        validator = ast.unparse(function('_validate_printable_coupon'))
+        self.assertNotIn("expected_y = _mm(design, 'coupon_fit_outer_height')", validator)
+        self.assertIn("_mm(design, 'coupon_fit_outer_width_' + safe)", validator)
+        self.assertIn("_mm(design, 'coupon_fit_slot_width_' + safe)", validator)
+        self.assertIn('body.vertices.item(index).geometry.x', validator)
+        self.assertIn('x_clusters', validator)
+        self.assertIn('cluster_centers', validator)
+        self.assertIn('-outer_width / 2', validator)
+        self.assertIn('-slot_width / 2', validator)
+        self.assertIn('slot_width / 2', validator)
+        self.assertIn('outer_width / 2', validator)
+        self.assertIn("minimum_y = _mm(design, 'coupon_fit_rail_length')", validator)
+        self.assertIn("maximum_y = minimum_y + _mm(design, 'coupon_fit_base_height')", validator)
+        self.assertIn('extents[1] < minimum_y - tolerance', validator)
+        self.assertIn('extents[1] > maximum_y + tolerance', validator)
+        self.assertIn('(extents[0], expected_x)', validator)
+        self.assertIn('(extents[2], expected_z)', validator)
+
+    def test_full_size_cable_review_gate_defaults_false(self):
+        gates = assignment('FULL_SIZE_RELEASE_GATES')
+        self.assertIn('cable_clearance_native_review', gates)
+        self.assertFalse(gates['cable_clearance_native_review'])
+        self.assertIn('physical USB-C coupon test', SOURCE)
+        self.assertIn('native visual/interference review', SOURCE)
+        self.assertIn('written confirmation', SOURCE)
+
+    def test_every_intersecting_printable_and_coupons_receive_cable_cut(self):
+        faceplate = ast.unparse(function('_build_faceplate'))
+        dock = ast.unparse(function('_build_dock_body'))
+        guide = ast.unparse(function('_build_guide_shelf_coupon'))
+        cable_coupon = ast.unparse(function('_build_faceplate_cable_coupon'))
+        self.assertIn('_cut_cable_profile', faceplate)
+        self.assertGreaterEqual(dock.count('_cut_cable_profile'), 2)
+        self.assertIn('_cut_cable_profile', guide)
+        self.assertIn('_cut_speaker_slot', guide)
+        self.assertIn('_cut_cable_profile', cable_coupon)
+        self.assertIn('component.bRepBodies.count != 1', cable_coupon)
+        self.assertIn(
+            'HALO_Dock_Rev_A_Faceplate_USB_C_Cable_Pocket',
+            assignment('COUPON_PART_IDS').values())
+
+    def test_speaker_slot_is_shared_xz_through_cut(self):
+        speaker = ast.unparse(function('_cut_speaker_slot'))
+        self.assertIn('component.xZConstructionPlane', ast.unparse(function('_offset_xz_plane')))
+        self.assertIn("'speaker_slot_width', 'speaker_slot_height'", speaker)
+        self.assertIn("'speaker_slot_center_x', 'speaker_slot_center_z'", speaker)
+        self.assertIn("profile, 'lower_support_thickness'", speaker)
+        self.assertNotIn("profile, 'speaker_slot_height'", speaker)
+        self.assertIn('height > _mm(design, \'guide_depth\')', speaker)
+        self.assertIn('shelf_wall <= 0', speaker)
+        self.assertIn('abs(width - 2.0)', speaker)
+        self.assertIn('abs(height - 0.5)', speaker)
+        self.assertIn('cut.extentOne.distance.value - shelf_wall', speaker)
+        self.assertIn('residual shelf material would block', speaker)
+        dock = ast.unparse(function('_build_dock_body'))
+        guide = ast.unparse(function('_build_guide_shelf_coupon'))
+        self.assertEqual(dock.count('_cut_speaker_slot'), 1)
+        self.assertEqual(guide.count('_cut_speaker_slot'), 1)
+        self.assertIn("'speaker_slot_plane_offset'", dock)
+        self.assertIn("'coupon_speaker_slot_plane_offset'", guide)
+
     def test_dual_lock_is_measurement_gated(self):
         self.assertNotIn('dual_lock_engaged_thickness', SOURCE)
         self.assertIn("('dual_lock_measured_engaged_thickness', '0 mm'", SOURCE)
@@ -147,8 +319,36 @@ class Sprint3StaticGuards(unittest.TestCase):
         fit = ast.unparse(function('_build_clearance_coupon'))
         wall = ast.unparse(function('_build_wall_coupon_field'))
         self.assertIn('JoinFeatureOperation', guide)
-        self.assertIn('JoinFeatureOperation', fit)
+        self.assertNotIn('JoinFeatureOperation', fit)
+        self.assertNotIn('CutFeatureOperation', fit)
         self.assertIn('measurement[0] > 0', wall)
+
+    def test_clearance_coupons_are_single_explicit_u_profiles(self):
+        fit = ast.unparse(function('_build_clearance_coupon'))
+        self.assertNotIn('JoinFeatureOperation', fit)
+        self.assertNotIn('CutFeatureOperation', fit)
+        self.assertEqual(fit.count('component.sketches.add('), 1)
+        self.assertEqual(fit.count('_extrude('), 1)
+        self.assertEqual(fit.count('NewBodyFeatureOperation'), 1)
+        self.assertIn("f'device_thickness + 2 * {parameter_name}'", fit)
+        self.assertIn("f'{slot_width} + 2 * coupon_fit_rail_width'", fit)
+        self.assertIn("_mm(design, 'coupon_fit_outer_height')", fit)
+        self.assertIn("_mm(design, 'coupon_fit_base_height')", fit)
+        self.assertIn('_mm(design, slot_width)', fit)
+        self.assertIn('_mm(design, outer_width)', fit)
+        self.assertIn('previous.endSketchPoint', fit)
+        self.assertIn('first.startSketchPoint', fit)
+        self.assertIn('sketch.profiles.count != 1', fit)
+        self.assertNotIn('sketch.geometricConstraints', fit)
+        self.assertNotIn('sketch.sketchDimensions', fit)
+        self.assertIn("'lower_support_thickness'", fit)
+        self.assertIn(
+            "('coupon_fit_outer_height', 'coupon_fit_rail_length + coupon_fit_base_height / 2'",
+            SOURCE)
+        self.assertEqual([8 + 2 * c for c in (0.2, 0.3, 0.4)], [8.4, 8.6, 8.8])
+        self.assertEqual([8 + 2 * c + 6 for c in (0.2, 0.3, 0.4)], [14.4, 14.6, 14.8])
+        self.assertEqual(30 + 3 / 2, 31.5)
+        self.assertIn("('lower_support_thickness', '3 mm'", SOURCE)
 
     def test_wall_fields_are_separate_controlled_parts(self):
         run = ast.unparse(function('run'))
@@ -176,11 +376,6 @@ class Sprint3StaticGuards(unittest.TestCase):
             ('wall_coupon_center_x', 'wall_coupon_center_x_left'),
         ):
             self.assertIn(f"('{left}', '-{right}'", SOURCE)
-        # Fit-gauge left centres are expressions derived from right centres,
-        # and both rails are generated through the same loop.
-        fit = ast.unparse(function('_build_clearance_coupon'))
-        self.assertIn("center_left, '-' + center_right", fit)
-        self.assertIn("('Right', center_right), ('Left', center_left)", fit)
 
     def test_manifest_matches_every_generated_stl_name(self):
         manifest = (ROOT / 'manufacturing/HALO_Dock_Rev_A_External_Print_Candidate/PART_MANIFEST.md').read_text()
@@ -188,8 +383,11 @@ class Sprint3StaticGuards(unittest.TestCase):
             'HALO_Dock_Rev_A_Clearance_0_2mm',
             'HALO_Dock_Rev_A_Clearance_0_3mm',
             'HALO_Dock_Rev_A_Clearance_0_4mm',
-            'HALO_Dock_Rev_A_Faceplate_Open_Corner_L',
+            'HALO_Dock_Rev_A_Faceplate_Open_Corner_L_R8_0',
+            'HALO_Dock_Rev_A_Faceplate_Open_Corner_L_R8_5',
+            'HALO_Dock_Rev_A_Faceplate_Open_Corner_L_R9_0',
             'HALO_Dock_Rev_A_Side_Guide_Lower_Shelf',
+            'HALO_Dock_Rev_A_Faceplate_USB_C_Cable_Pocket',
             'HALO_Dock_Rev_A_Wall_Stack_Shadow_Gap_Right',
             'HALO_Dock_Rev_A_Wall_Stack_Shadow_Gap_Left',
             'HALO_Dock_Rev_A_Faceplate_PRINT_CANDIDATE_ONLY',
