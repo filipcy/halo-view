@@ -159,11 +159,16 @@ class Sprint3StaticGuards(unittest.TestCase):
     def test_shelf_strength_and_usb_relief_are_guarded(self):
         self.assertIn("('lower_support_thickness', '3 mm'", SOURCE)
         self.assertIn("('shelf_hidden_structural_thickness', '3 mm'", SOURCE)
-        self.assertIn("('shelf_root_fillet_radius', '3 mm'", SOURCE)
+        self.assertIn("('shelf_root_fillet_radius', 'shelf_hidden_structural_thickness'", SOURCE)
+        self.assertIn(
+            "shelf_center_y + lower_support_thickness / 2 - shelf_hidden_structural_thickness",
+            SOURCE)
         self.assertIn("('usb_downward_relief', '0.30 mm'", SOURCE)
         self.assertIn("('usb_rear_relief', '0.20 mm'", SOURCE)
         reinforcement = ast.unparse(function('_add_shelf_root_reinforcement'))
         self.assertIn('shelf_root_fillet_radius', reinforcement)
+        self.assertIn('2 * shelf_hidden_structural_thickness', reinforcement)
+        self.assertIn('shelf_reinforcement_center_y', reinforcement)
         self.assertIn("'guide_depth'", reinforcement)
         self.assertIn('JoinFeatureOperation', reinforcement)
         dock = ast.unparse(function('_build_dock_body'))
@@ -171,6 +176,11 @@ class Sprint3StaticGuards(unittest.TestCase):
         self.assertIn('_add_shelf_root_reinforcement', dock)
         self.assertIn("('cable_pocket_width', '18 mm'", SOURCE)
         self.assertIn("-device_width / 2 + cable_pocket_edge_x", SOURCE)
+        validate = ast.unparse(function('_validate_iteration_2_geometry'))
+        self.assertIn('reinforcement_top > shelf_top + tolerance', validate)
+        self.assertIn(
+            'Hidden shelf reinforcement must not extend above the accepted shelf top datum.',
+            validate)
 
     def test_pocket_depth_drives_full_stack_and_coupon_parity_guard(self):
         self.assertIn("('pocket_depth', 'device_thickness + 2 * pocket_clearance_z'", SOURCE)
