@@ -600,19 +600,25 @@ def _add_shelf_root_reinforcement(component, design):
     """Join R3 roots whose top is tangent to, and never above, the shelf top."""
     for side, center_x in (
             ('Right', 'guide_center_x'), ('Left', 'guide_center_x_left')):
+        evaluated_center_x = _mm(design, center_x)
+        evaluated_center_y = _mm(design, 'shelf_reinforcement_center_y')
+        evaluated_radius = _mm(design, 'shelf_root_fillet_radius')
         sketch = component.sketches.add(component.xYConstructionPlane)
         sketch.name = side + ' hidden lower-shelf root fillet'
         circle = sketch.sketchCurves.sketchCircles.addByCenterRadius(
             adsk.core.Point3D.create(
-                _mm(design, center_x),
-                _mm(design, 'shelf_reinforcement_center_y'), 0),
-            _mm(design, 'shelf_root_fillet_radius'))
+                evaluated_center_x, evaluated_center_y, 0),
+            evaluated_radius)
+        # Fusion rejects a diameter dimension whose text point is exactly at
+        # the circle centre, so place the label clear of the reinforced root.
+        diameter_text_point = adsk.core.Point3D.create(
+            evaluated_center_x + 1.5 * evaluated_radius,
+            evaluated_center_y + 1.5 * evaluated_radius,
+            0)
         diameter = sketch.sketchDimensions.addDiameterDimension(
-            circle, adsk.core.Point3D.create(
-                _mm(design, center_x),
-                _mm(design, 'shelf_reinforcement_center_y'), 0))
+            circle, diameter_text_point)
         _set_dimension_expression(
-            diameter, '2 * shelf_hidden_structural_thickness')
+            diameter, '2 * shelf_root_fillet_radius')
         reinforcement = _extrude(
             component, sketch.profiles.item(0), 'guide_depth',
             adsk.fusion.FeatureOperations.JoinFeatureOperation)
