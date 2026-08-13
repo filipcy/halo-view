@@ -16,6 +16,10 @@ TABLET_FRONT_Z = TABLET_REAR_Z + DEVICE_T
 GUIDE_DEPTH = DEVICE_T + 0.60           # validated Z pocket allowance
 SIDE_W, SHELF_H = 3.0, 3.0
 LIP_OVERLAP, LIP_T = 1.25, 0.8
+# Retainers occupy the front-most 0.8 mm of the real tablet thickness.  They
+# capture the bezel edge without crossing the actual tablet-front plane.
+RETAINER_MAX_Z = TABLET_FRONT_Z
+RETAINER_MIN_Z = RETAINER_MAX_Z - LIP_T
 EDGE_CHAMFER = 2.0                       # exposed top/bottom plan edges only
 BUTTON_OLD = (146.0, 192.0)
 BUTTON_SHIFT = -22.0
@@ -71,12 +75,12 @@ def solids():
         box("back-bottom-right", USB_CENTRE_X + USB_POCKET[0] / 2, y0, 0, DEVICE_W - 18, 18, BACK_T),
         # Left guide and its minimal front safety lip.
         box("guide-left", x0 - SIDE_W, y0, BACK_T, x0, y1, BACK_T + GUIDE_DEPTH),
-        box("lip-left", x0 - SIDE_W, y0, BACK_T + GUIDE_DEPTH, LIP_OVERLAP, y1, BACK_T + GUIDE_DEPTH + LIP_T),
+        box("lip-left", x0 - SIDE_W, y0, RETAINER_MIN_Z, LIP_OVERLAP, y1, RETAINER_MAX_Z),
         # Right guide is split at the button access, exactly 22 mm lower.
         box("guide-right-low", x1, y0, BACK_T, x1 + SIDE_W, BUTTON_V2[0], BACK_T + GUIDE_DEPTH),
         box("guide-right-high", x1, BUTTON_V2[1], BACK_T, x1 + SIDE_W, y1, BACK_T + GUIDE_DEPTH),
-        box("lip-right-low", DEVICE_W - LIP_OVERLAP, y0, BACK_T + GUIDE_DEPTH, x1 + SIDE_W, BUTTON_V2[0], BACK_T + GUIDE_DEPTH + LIP_T),
-        box("lip-right-high", DEVICE_W - LIP_OVERLAP, BUTTON_V2[1], BACK_T + GUIDE_DEPTH, x1 + SIDE_W, y1, BACK_T + GUIDE_DEPTH + LIP_T),
+        box("lip-right-low", DEVICE_W - LIP_OVERLAP, y0, RETAINER_MIN_Z, x1 + SIDE_W, BUTTON_V2[0], RETAINER_MAX_Z),
+        box("lip-right-high", DEVICE_W - LIP_OVERLAP, BUTTON_V2[1], RETAINER_MIN_Z, x1 + SIDE_W, y1, RETAINER_MAX_Z),
         # Continuous lower load shelf, interrupted only by the connector pocket.
         prism("shelf-left-chamfered", [(x0, y0), (USB_CENTRE_X - USB_POCKET[0] / 2, y0),
               (USB_CENTRE_X - USB_POCKET[0] / 2, y0 - SHELF_H),
@@ -143,10 +147,10 @@ def views():
     # Orthographic review drawings are deliberately dimension-led, not photorealistic.
     front='''<rect x="227" y="55" width="366" height="506" rx="22"/><rect x="236" y="63" width="348" height="490" rx="19" fill="#303236"/><rect x="252" y="80" width="316" height="456" rx="10" fill="#090909"/><path d="M227 553h150m66 0h150" stroke="#999"/><path d="M593 264v110" stroke="#f4f4f2" stroke-width="10"/>'''
     back='''<rect x="227" y="55" width="366" height="506" rx="22"/><rect x="245" y="75" width="48" height="466" fill="#333"/><rect x="527" y="75" width="48" height="466" fill="#333"/><rect x="293" y="75" width="234" height="43" fill="#333"/><rect x="293" y="278" width="234" height="44" fill="#333"/><path d="M293 541h91v-70h58v70h85" fill="#333"/><rect x="245" y="105" width="40" height="44" fill="#777" stroke="#d8a737" stroke-width="4"/><text x="300" y="133" fill="#222" stroke="none">camera · rear-left</text><path d="M395 541v-72h34v-72" fill="none" stroke="#d8a737" stroke-width="12"/><circle cx="429" cy="397" r="22" fill="#f4f4f2" stroke="#d8a737" stroke-width="5"/>'''
-    side='''<path d="M260 85h16v470h-16z"/><path d="M276 85h34v470h-34z" fill="#303236"/><path d="M310 85h12v470h-12z"/><path d="M322 85h4v470h-4z" fill="#555"/><path d="M220 555h145" stroke="#999"/><path d="M260 570v-30M322 570v-30M260 568h62" stroke="#333"/><text x="280" y="590" fill="#222" stroke="none">11.0 to tablet front</text>'''
+    side='''<path d="M260 85h16v470h-16z"/><path d="M276 85h34v470h-34z" fill="#303236"/><path d="M310 85h12v470h-12z"/><path d="M308 85h14v470h-14z" fill="#555"/><path d="M220 555h145" stroke="#999"/><path d="M260 570v-30M310 570v-30M260 568h50" stroke="#333"/><text x="280" y="590" fill="#222" stroke="none">11.0 to tablet + retainer front</text>'''
     top='''<path d="M145 260h530v24H145z"/><path d="M157 284h506v138H157z" fill="#303236"/><path d="M145 422h530v15H145z"/><path d="M135 260h10v177h-10zM675 260h10v177h-10z" fill="#222"/>'''
     bottom='''<path d="M145 260h202v177H145zM473 260h202v177H473z"/><rect x="347" y="300" width="126" height="137" fill="#f4f4f2" stroke="#d8a737" stroke-width="5"/><path d="M410 300v-70" stroke="#d8a737" stroke-width="12"/><text x="323" y="470" fill="#222" stroke="none">90° USB-C pocket</text>'''
-    section='''<rect x="90" y="95" width="28" height="430" fill="#ddd"/><rect x="118" y="125" width="78" height="370"/><rect x="196" y="125" width="208" height="370" fill="#303236"/><rect x="404" y="125" width="18" height="370"/><path d="M90 555v-35M404 555v-35M90 548h314" stroke="#333"/><text x="205" y="580" fill="#222" stroke="none">11.0 wall → tablet front</text><text x="95" y="80" fill="#222" stroke="none">wall</text><text x="130" y="115" fill="#222" stroke="none">3.0 back</text><text x="255" y="115" fill="#222" stroke="none">8.0 tablet</text>'''
+    section='''<rect x="90" y="95" width="28" height="430" fill="#ddd"/><rect x="118" y="125" width="78" height="370"/><rect x="196" y="125" width="208" height="370" fill="#303236"/><rect x="384" y="125" width="20" height="370" fill="#555"/><path d="M90 555v-35M404 555v-35M90 548h314" stroke="#333"/><text x="205" y="580" fill="#222" stroke="none">11.0 wall → actual tablet / retainer front</text><text x="95" y="80" fill="#222" stroke="none">wall</text><text x="130" y="115" fill="#222" stroke="none">3.0 back</text><text x="255" y="115" fill="#222" stroke="none">8.0 tablet</text><text x="350" y="105" fill="#222" stroke="none">retainer Z 10.2–11.0</text>'''
     usb='''<rect x="120" y="80" width="580" height="430" rx="18"/><rect x="270" y="350" width="280" height="160" fill="#303236"/><rect x="345" y="410" width="130" height="100" fill="#f4f4f2" stroke="#d8a737" stroke-width="6"/><path d="M410 410v-145q0-45 45-45h80" fill="none" stroke="#d8a737" stroke-width="18"/><circle cx="535" cy="220" r="34" fill="#f4f4f2" stroke="#d8a737" stroke-width="6"/><text x="500" y="170" fill="#222" stroke="none">wall exit</text><text x="310" y="545" fill="#222" stroke="none">22 × 30 plug envelope</text>'''
     svg('01_front.svg','1 · Front',front); svg('02_rear.svg','2 · Rear skeleton + hidden cable route',back)
     svg('03_left.svg','3 · Left side',side); svg('04_right.svg','4 · Right side · button opening 22 mm lower',side)

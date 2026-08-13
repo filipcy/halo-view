@@ -12,6 +12,11 @@ prevent forward release while leaving the Samsung bezel dominant. The right
 button opening retains its 46 mm span and is moved from 146–192 mm to 124–170 mm
 from the bottom datum: exactly 22 mm lower.
 
+The 0.8 mm-thick side retainers occupy Z=10.2–11.0 mm, within the front-most
+portion of the tablet thickness envelope. Their front faces are flush with the
+actual tablet front at Z=11.0 mm; no retainer material projects in front of it.
+Their 1.25 mm XY capture and open-top insertion path are unchanged.
+
 The 22 × 30 mm 90-degree USB-C pocket and 12 mm route are review envelopes, not
 a released or production-approved cable fit. Both remain configurable and the
 selected adapter, housing and bend radius must be measured before print release.

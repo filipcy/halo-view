@@ -897,86 +897,86 @@ solid HALO_Wall_Mount_V2
  endfacet
  facet normal 0 0 -1
   outer loop
-   vertex -3.2 -0.2 11.6
-   vertex 1.25 211.2 11.6
-   vertex 1.25 -0.2 11.6
+   vertex -3.2 -0.2 10.2
+   vertex 1.25 211.2 10.2
+   vertex 1.25 -0.2 10.2
   endloop
  endfacet
  facet normal 0 0 -1
   outer loop
-   vertex -3.2 -0.2 11.6
-   vertex -3.2 211.2 11.6
-   vertex 1.25 211.2 11.6
+   vertex -3.2 -0.2 10.2
+   vertex -3.2 211.2 10.2
+   vertex 1.25 211.2 10.2
   endloop
  endfacet
  facet normal 0 0 1
   outer loop
-   vertex -3.2 -0.2 12.4
-   vertex 1.25 -0.2 12.4
-   vertex 1.25 211.2 12.4
+   vertex -3.2 -0.2 11
+   vertex 1.25 -0.2 11
+   vertex 1.25 211.2 11
   endloop
  endfacet
  facet normal 0 0 1
   outer loop
-   vertex -3.2 -0.2 12.4
-   vertex 1.25 211.2 12.4
-   vertex -3.2 211.2 12.4
+   vertex -3.2 -0.2 11
+   vertex 1.25 211.2 11
+   vertex -3.2 211.2 11
   endloop
  endfacet
  facet normal 0 -1 0
   outer loop
-   vertex -3.2 -0.2 11.6
-   vertex 1.25 -0.2 11.6
-   vertex 1.25 -0.2 12.4
+   vertex -3.2 -0.2 10.2
+   vertex 1.25 -0.2 10.2
+   vertex 1.25 -0.2 11
   endloop
  endfacet
  facet normal 0 -1 0
   outer loop
-   vertex -3.2 -0.2 11.6
-   vertex 1.25 -0.2 12.4
-   vertex -3.2 -0.2 12.4
+   vertex -3.2 -0.2 10.2
+   vertex 1.25 -0.2 11
+   vertex -3.2 -0.2 11
   endloop
  endfacet
  facet normal 1 0 0
   outer loop
-   vertex 1.25 -0.2 11.6
-   vertex 1.25 211.2 11.6
-   vertex 1.25 211.2 12.4
+   vertex 1.25 -0.2 10.2
+   vertex 1.25 211.2 10.2
+   vertex 1.25 211.2 11
   endloop
  endfacet
  facet normal 1 0 0
   outer loop
-   vertex 1.25 -0.2 11.6
-   vertex 1.25 211.2 12.4
-   vertex 1.25 -0.2 12.4
+   vertex 1.25 -0.2 10.2
+   vertex 1.25 211.2 11
+   vertex 1.25 -0.2 11
   endloop
  endfacet
  facet normal 0 1 0
   outer loop
-   vertex 1.25 211.2 11.6
-   vertex -3.2 211.2 11.6
-   vertex -3.2 211.2 12.4
+   vertex 1.25 211.2 10.2
+   vertex -3.2 211.2 10.2
+   vertex -3.2 211.2 11
   endloop
  endfacet
  facet normal 0 1 -0
   outer loop
-   vertex 1.25 211.2 11.6
-   vertex -3.2 211.2 12.4
-   vertex 1.25 211.2 12.4
+   vertex 1.25 211.2 10.2
+   vertex -3.2 211.2 11
+   vertex 1.25 211.2 11
   endloop
  endfacet
  facet normal -1 0 0
   outer loop
-   vertex -3.2 211.2 11.6
-   vertex -3.2 -0.2 11.6
-   vertex -3.2 -0.2 12.4
+   vertex -3.2 211.2 10.2
+   vertex -3.2 -0.2 10.2
+   vertex -3.2 -0.2 11
   endloop
  endfacet
  facet normal -1 0 0
   outer loop
-   vertex -3.2 211.2 11.6
-   vertex -3.2 -0.2 12.4
-   vertex -3.2 211.2 12.4
+   vertex -3.2 211.2 10.2
+   vertex -3.2 -0.2 11
+   vertex -3.2 211.2 11
   endloop
  endfacet
  facet normal 0 0 -1
@@ -1149,170 +1149,170 @@ solid HALO_Wall_Mount_V2
  endfacet
  facet normal 0 0 -1
   outer loop
-   vertex 123.75 -0.2 11.6
-   vertex 128.2 124 11.6
-   vertex 128.2 -0.2 11.6
+   vertex 123.75 -0.2 10.2
+   vertex 128.2 124 10.2
+   vertex 128.2 -0.2 10.2
   endloop
  endfacet
  facet normal 0 0 -1
   outer loop
-   vertex 123.75 -0.2 11.6
-   vertex 123.75 124 11.6
-   vertex 128.2 124 11.6
+   vertex 123.75 -0.2 10.2
+   vertex 123.75 124 10.2
+   vertex 128.2 124 10.2
   endloop
  endfacet
  facet normal 0 0 1
   outer loop
-   vertex 123.75 -0.2 12.4
-   vertex 128.2 -0.2 12.4
-   vertex 128.2 124 12.4
+   vertex 123.75 -0.2 11
+   vertex 128.2 -0.2 11
+   vertex 128.2 124 11
   endloop
  endfacet
  facet normal 0 0 1
   outer loop
-   vertex 123.75 -0.2 12.4
-   vertex 128.2 124 12.4
-   vertex 123.75 124 12.4
+   vertex 123.75 -0.2 11
+   vertex 128.2 124 11
+   vertex 123.75 124 11
   endloop
  endfacet
  facet normal 0 -1 0
   outer loop
-   vertex 123.75 -0.2 11.6
-   vertex 128.2 -0.2 11.6
-   vertex 128.2 -0.2 12.4
+   vertex 123.75 -0.2 10.2
+   vertex 128.2 -0.2 10.2
+   vertex 128.2 -0.2 11
   endloop
  endfacet
  facet normal 0 -1 0
   outer loop
-   vertex 123.75 -0.2 11.6
-   vertex 128.2 -0.2 12.4
-   vertex 123.75 -0.2 12.4
+   vertex 123.75 -0.2 10.2
+   vertex 128.2 -0.2 11
+   vertex 123.75 -0.2 11
   endloop
  endfacet
  facet normal 1 0 0
   outer loop
-   vertex 128.2 -0.2 11.6
-   vertex 128.2 124 11.6
-   vertex 128.2 124 12.4
+   vertex 128.2 -0.2 10.2
+   vertex 128.2 124 10.2
+   vertex 128.2 124 11
   endloop
  endfacet
  facet normal 1 0 0
   outer loop
-   vertex 128.2 -0.2 11.6
-   vertex 128.2 124 12.4
-   vertex 128.2 -0.2 12.4
+   vertex 128.2 -0.2 10.2
+   vertex 128.2 124 11
+   vertex 128.2 -0.2 11
   endloop
  endfacet
  facet normal 0 1 0
   outer loop
-   vertex 128.2 124 11.6
-   vertex 123.75 124 11.6
-   vertex 123.75 124 12.4
+   vertex 128.2 124 10.2
+   vertex 123.75 124 10.2
+   vertex 123.75 124 11
   endloop
  endfacet
  facet normal 0 1 -0
   outer loop
-   vertex 128.2 124 11.6
-   vertex 123.75 124 12.4
-   vertex 128.2 124 12.4
+   vertex 128.2 124 10.2
+   vertex 123.75 124 11
+   vertex 128.2 124 11
   endloop
  endfacet
  facet normal -1 0 0
   outer loop
-   vertex 123.75 124 11.6
-   vertex 123.75 -0.2 11.6
-   vertex 123.75 -0.2 12.4
+   vertex 123.75 124 10.2
+   vertex 123.75 -0.2 10.2
+   vertex 123.75 -0.2 11
   endloop
  endfacet
  facet normal -1 0 0
   outer loop
-   vertex 123.75 124 11.6
-   vertex 123.75 -0.2 12.4
-   vertex 123.75 124 12.4
+   vertex 123.75 124 10.2
+   vertex 123.75 -0.2 11
+   vertex 123.75 124 11
   endloop
  endfacet
  facet normal 0 0 -1
   outer loop
-   vertex 123.75 170 11.6
-   vertex 128.2 211.2 11.6
-   vertex 128.2 170 11.6
+   vertex 123.75 170 10.2
+   vertex 128.2 211.2 10.2
+   vertex 128.2 170 10.2
   endloop
  endfacet
  facet normal 0 0 -1
   outer loop
-   vertex 123.75 170 11.6
-   vertex 123.75 211.2 11.6
-   vertex 128.2 211.2 11.6
+   vertex 123.75 170 10.2
+   vertex 123.75 211.2 10.2
+   vertex 128.2 211.2 10.2
   endloop
  endfacet
  facet normal 0 0 1
   outer loop
-   vertex 123.75 170 12.4
-   vertex 128.2 170 12.4
-   vertex 128.2 211.2 12.4
+   vertex 123.75 170 11
+   vertex 128.2 170 11
+   vertex 128.2 211.2 11
   endloop
  endfacet
  facet normal 0 0 1
   outer loop
-   vertex 123.75 170 12.4
-   vertex 128.2 211.2 12.4
-   vertex 123.75 211.2 12.4
+   vertex 123.75 170 11
+   vertex 128.2 211.2 11
+   vertex 123.75 211.2 11
   endloop
  endfacet
  facet normal 0 -1 0
   outer loop
-   vertex 123.75 170 11.6
-   vertex 128.2 170 11.6
-   vertex 128.2 170 12.4
+   vertex 123.75 170 10.2
+   vertex 128.2 170 10.2
+   vertex 128.2 170 11
   endloop
  endfacet
  facet normal 0 -1 0
   outer loop
-   vertex 123.75 170 11.6
-   vertex 128.2 170 12.4
-   vertex 123.75 170 12.4
+   vertex 123.75 170 10.2
+   vertex 128.2 170 11
+   vertex 123.75 170 11
   endloop
  endfacet
  facet normal 1 0 0
   outer loop
-   vertex 128.2 170 11.6
-   vertex 128.2 211.2 11.6
-   vertex 128.2 211.2 12.4
+   vertex 128.2 170 10.2
+   vertex 128.2 211.2 10.2
+   vertex 128.2 211.2 11
   endloop
  endfacet
  facet normal 1 0 0
   outer loop
-   vertex 128.2 170 11.6
-   vertex 128.2 211.2 12.4
-   vertex 128.2 170 12.4
+   vertex 128.2 170 10.2
+   vertex 128.2 211.2 11
+   vertex 128.2 170 11
   endloop
  endfacet
  facet normal 0 1 0
   outer loop
-   vertex 128.2 211.2 11.6
-   vertex 123.75 211.2 11.6
-   vertex 123.75 211.2 12.4
+   vertex 128.2 211.2 10.2
+   vertex 123.75 211.2 10.2
+   vertex 123.75 211.2 11
   endloop
  endfacet
  facet normal 0 1 -0
   outer loop
-   vertex 128.2 211.2 11.6
-   vertex 123.75 211.2 12.4
-   vertex 128.2 211.2 12.4
+   vertex 128.2 211.2 10.2
+   vertex 123.75 211.2 11
+   vertex 128.2 211.2 11
   endloop
  endfacet
  facet normal -1 0 0
   outer loop
-   vertex 123.75 211.2 11.6
-   vertex 123.75 170 11.6
-   vertex 123.75 170 12.4
+   vertex 123.75 211.2 10.2
+   vertex 123.75 170 10.2
+   vertex 123.75 170 11
   endloop
  endfacet
  facet normal -1 0 0
   outer loop
-   vertex 123.75 211.2 11.6
-   vertex 123.75 170 12.4
-   vertex 123.75 211.2 12.4
+   vertex 123.75 211.2 10.2
+   vertex 123.75 170 11
+   vertex 123.75 211.2 11
   endloop
  endfacet
  facet normal -0 0 1

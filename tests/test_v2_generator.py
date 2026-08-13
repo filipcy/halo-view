@@ -23,10 +23,29 @@ class V2GeneratorGuards(unittest.TestCase):
         self.assertEqual(V2.TABLET_REAR_Z, 3.0)
         self.assertEqual(V2.TABLET_FRONT_Z, 11.0)
         self.assertEqual(V2.TABLET_FRONT_Z - V2.WALL_CONTACT_Z, 11.0)
-        self.assertNotEqual(V2.TABLET_FRONT_Z,
-                            V2.BACK_T + V2.GUIDE_DEPTH + V2.LIP_T)
+        self.assertEqual(V2.RETAINER_MAX_Z, V2.TABLET_FRONT_Z)
+        self.assertEqual(V2.RETAINER_MIN_Z, V2.TABLET_FRONT_Z - V2.LIP_T)
         self.assertGreaterEqual(V2.LIP_OVERLAP, 1.0)
         self.assertLessEqual(V2.LIP_OVERLAP, 1.5)
+
+    def test_retainer_solids_stay_within_useful_tablet_thickness(self):
+        retainers = [part for part in V2.solids()
+                     if part[0].startswith("lip-")]
+        self.assertEqual(len(retainers), 3)
+        for _, minimum, maximum in retainers:
+            self.assertLessEqual(maximum[2], V2.TABLET_FRONT_Z)
+            self.assertGreater(minimum[2], V2.TABLET_REAR_Z)
+            self.assertLess(minimum[2], V2.TABLET_FRONT_Z)
+            self.assertEqual(minimum[2], V2.RETAINER_MIN_Z)
+            self.assertEqual(maximum[2], V2.RETAINER_MAX_Z)
+
+    def test_retainer_xy_overlap_remains_exactly_1_25_mm(self):
+        parts = {part[0]: part for part in V2.solids()}
+        left = parts["lip-left"]
+        right_low = parts["lip-right-low"]
+        self.assertEqual(left[2][0], V2.LIP_OVERLAP)
+        self.assertEqual(V2.DEVICE_W - right_low[1][0], V2.LIP_OVERLAP)
+        self.assertEqual(V2.LIP_OVERLAP, 1.25)
 
     def test_camera_is_rear_view_left_not_mirrored_rev_a_side(self):
         self.assertEqual(V2.CAMERA_CENTER_X,
