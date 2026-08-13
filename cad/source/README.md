@@ -14,6 +14,13 @@ A failed run can leave partial generated components behind. The generator is not
 
 `FULL_SIZE_PRINT_CANDIDATE` writes to `~/Documents/HALO_Dock_Rev_A/print-candidate/`, but only after the measured wall stack and every explicit evidence flag passes. Flags cover native execution, +1 mm rebuild, interference checks, coupon approval, clearance selection, slicer review, and written authorization. Full parts remain `PRINT CANDIDATE ONLY`. Full mode emits separate component-scoped STEP + STL pairs for Faceplate and DockBody; it never exports the contaminated design root.
 
+The generator finishes each full-size printable component with native Fusion
+Combine/Join features. Full-size release validation blocks export unless both
+`Faceplate.bRepBodies.count` and `DockBody.bRepBodies.count` equal exactly one.
+After changing or pulling this generator, rerun it natively in Fusion 360 from a
+fresh, empty Hybrid Design document and repeat the timeline, interference, STEP,
+STL, and slicer inspections; static tests cannot prove native BRep joins.
+
 ## Measurement blocker
 
 `dual_lock_measured_engaged_thickness` defaults to `0 mm`, meaning **NOT MEASURED**. It is labeled `REQUIRED PHYSICAL MEASUREMENT — exact selected Dual Lock pair`. Do not substitute a catalog claim or estimate. The wall coupon and all full-size exports remain blocked until the exact selected, mated pair is measured and the derived recess leaves positive structural backing.

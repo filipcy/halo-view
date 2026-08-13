@@ -415,6 +415,27 @@ class Sprint3StaticGuards(unittest.TestCase):
         self.assertIn("FULL_SIZE_PART_IDS['faceplate']", export)
         self.assertIn("FULL_SIZE_PART_IDS['dock_body']", export)
 
+    def test_full_size_parts_are_combined_and_single_body_release_guarded(self):
+        joiner = ast.unparse(function('_join_structural_bodies'))
+        self.assertIn('component.features.combineFeatures.createInput', joiner)
+        self.assertIn('JoinFeatureOperation', joiner)
+        self.assertIn('combine_input.isKeepToolBodies = False', joiner)
+        self.assertIn('component.bRepBodies.count != 1', joiner)
+
+        faceplate = ast.unparse(function('_build_faceplate'))
+        dock = ast.unparse(function('_build_dock_body'))
+        self.assertIn('_join_structural_bodies', faceplate)
+        self.assertIn('lip_feature.bodies.item(0)', faceplate)
+        self.assertIn('_join_structural_bodies', dock)
+        self.assertIn('feature.bodies.item(0)', dock)
+
+        release = ast.unparse(function('_validate_full_size_release'))
+        self.assertIn('faceplate.bRepBodies.count != 1', release)
+        self.assertIn('dock_body.bRepBodies.count != 1', release)
+        export = ast.unparse(function('_export_outputs'))
+        self.assertIn(
+            '_validate_full_size_release(design, faceplate, dock_body)', export)
+
     def test_all_required_pairs_use_signed_centres(self):
         for right, left in (
             ('guide_center_x', 'guide_center_x_left'),
