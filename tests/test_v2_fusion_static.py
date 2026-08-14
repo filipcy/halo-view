@@ -73,16 +73,26 @@ class FusionGeneratorStaticTests(unittest.TestCase):
         self.assertIn("bridge_center_y = (USB_POCKET[1] + channel_end_y) / 2", source)
         self.assertIn("PROVISIONAL Single Transverse USB Cable Bridge", source)
         self.assertIn("adsk.fusion.FeatureOperations.JoinFeatureOperation", source)
+        self.assertIn("combineFeatures.createInput(holder, tools)", source)
+        self.assertIn("join_input.isKeepToolBodies = False", source)
         self.assertNotIn("Wall Exit Cutter", source)
 
     def test_usb_features_do_not_leave_helper_brep_bodies(self):
         source = FUSION.read_text(encoding="utf-8")
         route = source[source.index("def _cut_usb_route"):source.index("def _chamfer_long_front_edges")]
-        self.assertNotIn("combineFeatures.createInput", route)
-        self.assertNotIn("NewBodyFeatureOperation", route)
         self.assertIn("CutFeatureOperation", route)
         self.assertIn("JoinFeatureOperation", route)
+        self.assertEqual(route.count("combineFeatures.createInput"), 1)
+        self.assertIn("join_input.isKeepToolBodies = False", route)
         self.assertIn("holder_component.bRepBodies.count != 1", source)
+
+    def test_one_body_failure_reports_each_remaining_body(self):
+        source = FUSION.read_text(encoding="utf-8")
+        self.assertIn("def _body_diagnostics", source)
+        self.assertIn("body.physicalProperties.volume", source)
+        self.assertIn("measureMinimumDistance(main_holder, body)", source)
+        self.assertIn("bounds.minPoint.x", source)
+        self.assertIn("bounds.maxPoint.z", source)
 
     def test_generator_exports_required_inspection_views(self):
         source = FUSION.read_text(encoding="utf-8")

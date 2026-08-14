@@ -226,15 +226,23 @@ def _cut_usb_route(component, holder):
     bridge_center_y = (USB_POCKET[1] + channel_end_y) / 2
     # This is deliberately one continuous roof solid, not two retention tabs.
     # Its ends overlap both channel banks, making a closed side-to-side bridge.
-    bridge_feature = _feature_box(
+    # Create the roof as one body, then explicitly Combine/Join it into the
+    # holder.  A direct Join extrusion can leave a second body when Fusion's
+    # profile/body participation inference does not select both channel banks.
+    bridge_body = _box(
         component, "PROVISIONAL USB Cable Retaining Bridge Roof",
         USB_CENTRE_X - pocket_half,
         bridge_center_y - USB_BRIDGE_W / 2,
         USB_CABLE_CLEARANCE_Z,
         USB_CENTRE_X + pocket_half,
         bridge_center_y + USB_BRIDGE_W / 2,
-        REAR_SUPPORT_MAX_Z,
-        adsk.fusion.FeatureOperations.JoinFeatureOperation)
+        REAR_SUPPORT_MAX_Z)
+    tools = adsk.core.ObjectCollection.create()
+    tools.add(bridge_body)
+    join_input = component.features.combineFeatures.createInput(holder, tools)
+    join_input.operation = adsk.fusion.FeatureOperations.JoinFeatureOperation
+    join_input.isKeepToolBodies = False
+    bridge_feature = component.features.combineFeatures.add(join_input)
     bridge_feature.name = "PROVISIONAL Single Transverse USB Cable Bridge"
     return (pocket_feature, channel_feature), bridge_feature
 
@@ -272,10 +280,41 @@ def _create_component(root, name):
     return occurrence.component
 
 
+def _body_diagnostics(component, main_holder):
+    """Return detailed failure-only diagnostics for unexpected holder bodies."""
+    lines = []
+    measure = adsk.core.MeasureManager.get()
+    for index in range(component.bRepBodies.count):
+        body = component.bRepBodies.item(index)
+        bounds = body.boundingBox
+        minimum = tuple(value * 10.0 for value in
+                        (bounds.minPoint.x, bounds.minPoint.y, bounds.minPoint.z))
+        maximum = tuple(value * 10.0 for value in
+                        (bounds.maxPoint.x, bounds.maxPoint.y, bounds.maxPoint.z))
+        try:
+            volume = f"{body.physicalProperties.volume * 1000.0:.3f} mm^3"
+        except Exception:
+            volume = "unavailable"
+        if body is main_holder:
+            contact = "main holder"
+        else:
+            try:
+                distance = measure.measureMinimumDistance(main_holder, body).value * 10.0
+                contact = f"touches/intersects={distance <= 1e-6} (gap={distance:.6f} mm)"
+            except Exception:
+                contact = "touch/intersection unavailable"
+        lines.append(
+            f"[{index}] {body.name}: min={minimum}, max={maximum}, "
+            f"volume={volume}, {contact}")
+    return "\n".join(lines)
+
+
 def _validate_and_report(ui, holder_component, holder, envelope_component,
                          usb_feature, bridge_feature, chamfer_feature):
     if holder_component.bRepBodies.count != 1:
-        raise RuntimeError(f"Holder body count is {holder_component.bRepBodies.count}, expected 1")
+        details = _body_diagnostics(holder_component, holder)
+        raise RuntimeError(
+            f"Holder body count is {holder_component.bRepBodies.count}, expected 1\n{details}")
     if envelope_component is holder_component or envelope_component.bRepBodies.count != 1:
         raise RuntimeError("Tablet envelope is not a separate single-body component")
     bounds = holder.boundingBox
