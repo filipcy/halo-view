@@ -57,20 +57,21 @@ class FusionGeneratorStaticTests(unittest.TestCase):
     def test_provisional_usb_parameters_drive_real_cut_geometry(self):
         source = FUSION.read_text(encoding="utf-8")
         self.assertIn("def _cut_usb_route", source)
-        self.assertIn('"PROVISIONAL USB-C Plug Pocket"', source)
-        self.assertIn('"PROVISIONAL Hidden Cable Channel"', source)
+        self.assertIn('"Back Bottom Left"', source)
+        self.assertIn('"Back Bottom Right"', source)
+        self.assertNotIn('"PROVISIONAL USB Routing Deck"', source)
         self.assertNotIn('"PROVISIONAL Wall Exit Cutter"', source)
         self.assertIn("USB_POCKET[1]", source)
         self.assertIn("USB_CHANNEL_W / 2", source)
-        self.assertIn("WALL_EXIT_Y + channel_half <= DEVICE_H", source)
-        self.assertGreaterEqual(source.count("CutFeatureOperation"), 2)
+        self.assertIn("WALL_EXIT_Y < DEVICE_H", source)
 
     def test_usb_route_has_one_transverse_bridge_and_no_dedicated_exit(self):
         source = FUSION.read_text(encoding="utf-8")
         self.assertEqual(source.count('"PROVISIONAL USB Cable Retaining Bridge Roof"'), 1)
         self.assertIn("USB_BRIDGE_W = 4.5", source)
         self.assertIn("USB_CABLE_CLEARANCE_Z", source)
-        self.assertIn("bridge_center_y = (USB_POCKET[1] + channel_end_y) / 2", source)
+        self.assertIn("USB_BRIDGE_CENTER_Y = 15.0", source)
+        self.assertIn("USB_BRIDGE_OVERLAP = 0.5", source)
         self.assertIn("PROVISIONAL Single Transverse USB Cable Bridge", source)
         self.assertIn("adsk.fusion.FeatureOperations.JoinFeatureOperation", source)
         self.assertIn("combineFeatures.createInput(holder, tools)", source)
@@ -80,10 +81,10 @@ class FusionGeneratorStaticTests(unittest.TestCase):
     def test_usb_features_do_not_leave_helper_brep_bodies(self):
         source = FUSION.read_text(encoding="utf-8")
         route = source[source.index("def _cut_usb_route"):source.index("def _chamfer_long_front_edges")]
-        self.assertIn("CutFeatureOperation", route)
         self.assertIn("JoinFeatureOperation", route)
         self.assertEqual(route.count("combineFeatures.createInput"), 1)
         self.assertIn("join_input.isKeepToolBodies = False", route)
+        self.assertNotIn("PROVISIONAL USB Routing Deck", source)
         self.assertIn("holder_component.bRepBodies.count != 1", source)
 
     def test_one_body_failure_reports_each_remaining_body(self):

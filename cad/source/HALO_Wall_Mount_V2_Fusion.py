@@ -40,6 +40,8 @@ USB_CENTRE_X = 62.0
 WALL_EXIT_Y = 35.0
 USB_CABLE_CLEARANCE_Z = 2.0  # PROVISIONAL until the selected cable is measured.
 USB_BRIDGE_W = 4.5
+USB_BRIDGE_CENTER_Y = 15.0
+USB_BRIDGE_OVERLAP = 0.5
 FRONT_EDGE_CHAMFER = 0.9
 CAMERA_FROM_REAR_LEFT = 15.5
 CAMERA_FROM_BOTTOM = 196.0
@@ -158,13 +160,6 @@ def _holder_parts(component):
     add_box("Back Mid", 18, 92, 0, DEVICE_W - 18, 110, REAR_SUPPORT_MAX_Z)
     add_box("Back Bottom Left", 18, y0, 0, USB_CENTRE_X - USB_POCKET[0] / 2, 18, REAR_SUPPORT_MAX_Z)
     add_box("Back Bottom Right", USB_CENTRE_X + USB_POCKET[0] / 2, y0, 0, DEVICE_W - 18, 18, REAR_SUPPORT_MAX_Z)
-    # A projection-neutral deck provides material for the provisional wall-side
-    # plug recess and cable race.  The recess is cut after all pieces are joined.
-    add_box("PROVISIONAL USB Routing Deck",
-            USB_CENTRE_X - USB_POCKET[0] / 2, y0, 0,
-            USB_CENTRE_X + USB_POCKET[0] / 2,
-            WALL_EXIT_Y + USB_CHANNEL_W / 2, REAR_SUPPORT_MAX_Z)
-
     # These outside-edge spines bridge the deliberate 0.30 mm tablet/rear gap.
     # They sit outside the tablet envelope and preserve the real rear clearance.
     add_box("Left Spine", x0 - SIDE_W, y0, 0, x0, y1, TABLET_REAR_Z)
@@ -203,39 +198,19 @@ def _join_holder(component, bodies):
 
 
 def _cut_usb_route(component, holder):
-    """Cut the provisional plug pocket and channel into the open rear area."""
+    """Add one bridge across the existing split-support USB cable opening."""
     pocket_half = USB_POCKET[0] / 2
-    channel_half = USB_CHANNEL_W / 2
-    channel_end_y = WALL_EXIT_Y + channel_half
-    # Direct Cut extrusions modify the unified holder in place and cannot leave
-    # independent cutter BRep bodies behind in the holder component.
-    pocket_feature = _feature_box(
-        component, "PROVISIONAL USB-C Plug Pocket",
-        USB_CENTRE_X - pocket_half, -CLEARANCE_Y, 0,
-        USB_CENTRE_X + pocket_half, USB_POCKET[1], REAR_SUPPORT_MAX_Z,
-        adsk.fusion.FeatureOperations.CutFeatureOperation)
-    channel_feature = _feature_box(
-        component, "PROVISIONAL Hidden Cable Channel",
-        USB_CENTRE_X - channel_half, USB_POCKET[1], 0,
-        USB_CENTRE_X + channel_half, channel_end_y, REAR_SUPPORT_MAX_Z,
-        adsk.fusion.FeatureOperations.CutFeatureOperation)
-
-    # One transverse roof retains the cable while preserving the complete
-    # provisional clearance beneath it.  The rest of the channel remains open,
-    # including its unobstructed discharge into the large rear skeleton opening.
-    bridge_center_y = (USB_POCKET[1] + channel_end_y) / 2
-    # This is deliberately one continuous roof solid, not two retention tabs.
-    # Its ends overlap both channel banks, making a closed side-to-side bridge.
-    # Create the roof as one body, then explicitly Combine/Join it into the
-    # holder.  A direct Join extrusion can leave a second body when Fusion's
-    # profile/body participation inference does not select both channel banks.
+    # The split lower rear supports already define the plug pocket and cable
+    # opening; no routing deck or vertical bridge pillars are required.  Locate
+    # the one-piece roof within those supports and overlap each by 0.5 mm so the
+    # boolean intersection is volumetric rather than merely face-coincident.
     bridge_body = _box(
         component, "PROVISIONAL USB Cable Retaining Bridge Roof",
-        USB_CENTRE_X - pocket_half,
-        bridge_center_y - USB_BRIDGE_W / 2,
+        USB_CENTRE_X - pocket_half - USB_BRIDGE_OVERLAP,
+        USB_BRIDGE_CENTER_Y - USB_BRIDGE_W / 2,
         USB_CABLE_CLEARANCE_Z,
-        USB_CENTRE_X + pocket_half,
-        bridge_center_y + USB_BRIDGE_W / 2,
+        USB_CENTRE_X + pocket_half + USB_BRIDGE_OVERLAP,
+        USB_BRIDGE_CENTER_Y + USB_BRIDGE_W / 2,
         REAR_SUPPORT_MAX_Z)
     tools = adsk.core.ObjectCollection.create()
     tools.add(bridge_body)
@@ -244,7 +219,7 @@ def _cut_usb_route(component, holder):
     join_input.isKeepToolBodies = False
     bridge_feature = component.features.combineFeatures.add(join_input)
     bridge_feature.name = "PROVISIONAL Single Transverse USB Cable Bridge"
-    return (pocket_feature, channel_feature), bridge_feature
+    return bridge_feature
 
 
 def _chamfer_long_front_edges(component, holder):
@@ -309,7 +284,7 @@ def _body_diagnostics(component):
 
 
 def _validate_and_report(ui, holder_component, holder, envelope_component,
-                         usb_feature, bridge_feature, chamfer_feature):
+                         bridge_feature, chamfer_feature):
     if holder_component.bRepBodies.count != 1:
         details = _body_diagnostics(holder_component)
         ui.messageBox(
@@ -323,9 +298,6 @@ def _validate_and_report(ui, holder_component, holder, envelope_component,
     max_z = bounds.maxPoint.z * 10.0
     if max_z > TABLET_FRONT_Z + 1e-6:
         raise RuntimeError(f"Holder exceeds tablet front plane: max Z={max_z:.4f} mm")
-    if (len(usb_feature) != 2 or
-            any(not feature or not feature.isValid for feature in usb_feature)):
-        raise RuntimeError("Provisional USB pocket/channel cut features are missing or invalid")
     if not bridge_feature or not bridge_feature.isValid:
         raise RuntimeError("Single transverse USB retaining bridge is missing or invalid")
     if not chamfer_feature or not chamfer_feature.isValid:
@@ -333,10 +305,12 @@ def _validate_and_report(ui, holder_component, holder, envelope_component,
     channel_half = USB_CHANNEL_W / 2
     if not (0 <= USB_CENTRE_X - channel_half and
             USB_CENTRE_X + channel_half <= DEVICE_W and
-            USB_POCKET[1] < WALL_EXIT_Y + channel_half <= DEVICE_H):
-        raise RuntimeError("USB channel does not discharge behind the tablet outline")
+            0 < USB_BRIDGE_CENTER_Y < min(18, USB_POCKET[1]) and
+            WALL_EXIT_Y < DEVICE_H):
+        raise RuntimeError("USB opening or bridge is not behind the tablet outline")
     if not (4.0 <= USB_BRIDGE_W <= 5.0 and
-            USB_CABLE_CLEARANCE_Z < REAR_SUPPORT_MAX_Z):
+            USB_CABLE_CLEARANCE_Z < REAR_SUPPORT_MAX_Z and
+            0.3 <= USB_BRIDGE_OVERLAP <= 0.5):
         raise RuntimeError("USB bridge width or under-bridge clearance is invalid")
     dimensions = tuple((high - low) * 10.0 for low, high in (
         (bounds.minPoint.x, bounds.maxPoint.x),
@@ -409,14 +383,14 @@ def run(context):
         root = design.rootComponent
         holder_component = _create_component(root, COMPONENT_NAME)
         holder = _join_holder(holder_component, _holder_parts(holder_component))
-        usb_feature, bridge_feature = _cut_usb_route(holder_component, holder)
+        bridge_feature = _cut_usb_route(holder_component, holder)
         chamfer_feature = _chamfer_long_front_edges(holder_component, holder)
         envelope_component = _create_component(root, ENVELOPE_NAME)
         envelope = _rounded_box(envelope_component, "Tablet Envelope", DEVICE_W,
                                 DEVICE_H, DEVICE_R, TABLET_REAR_Z, TABLET_FRONT_Z)
         envelope.isLightBulbOn = True
         _validate_and_report(ui, holder_component, holder, envelope_component,
-                             usb_feature, bridge_feature, chamfer_feature)
+                             bridge_feature, chamfer_feature)
         output = _export(design, holder_component, holder)
         _export_inspection_views(app, envelope, output)
     except Exception:
