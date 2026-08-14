@@ -54,6 +54,22 @@ class FusionGeneratorStaticTests(unittest.TestCase):
         self.assertIn('"HALO_Wall_Mount_V2.stl"', source)
         self.assertIn("combineFeatures", source)
 
+    def test_provisional_usb_parameters_drive_real_cut_geometry(self):
+        source = FUSION.read_text(encoding="utf-8")
+        self.assertIn("def _cut_usb_route", source)
+        self.assertIn('"PROVISIONAL USB-C Plug Pocket Cutter"', source)
+        self.assertIn('"PROVISIONAL Hidden Cable Channel Cutter"', source)
+        self.assertIn('"PROVISIONAL Wall Exit Cutter"', source)
+        self.assertIn("USB_POCKET[1]", source)
+        self.assertIn("USB_CHANNEL_W / 2", source)
+        self.assertIn("WALL_EXIT_Y + channel_half <= DEVICE_H", source)
+        self.assertIn("CutFeatureOperation", source)
+
+    def test_tablet_envelope_uses_physical_corner_radius(self):
+        source = FUSION.read_text(encoding="utf-8")
+        self.assertIn("def _rounded_box", source)
+        self.assertIn("DEVICE_H, DEVICE_R, TABLET_REAR_Z", source)
+
 
 if __name__ == "__main__":
     unittest.main()

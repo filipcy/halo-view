@@ -6,6 +6,7 @@ The USB-C keep-out remains PROVISIONAL pending measurement of the final plug.
 """
 
 import os
+import math
 import traceback
 
 import adsk.core
@@ -37,6 +38,7 @@ USB_POCKET = (22.0, 30.0)  # PROVISIONAL: verify against the selected adapter.
 USB_CHANNEL_W = 12.0
 USB_CENTRE_X = 62.0
 WALL_EXIT_Y = 35.0
+USB_RECESS_DEPTH = 2.0  # PROVISIONAL wall-side recess; retain 0.7 mm cover.
 CAMERA_FROM_REAR_LEFT = 15.5
 CAMERA_FROM_BOTTOM = 196.0
 CAMERA_SIZE = 18.0
@@ -83,6 +85,39 @@ def _box(component, name, x0, y0, z0, x1, y1, z1):
                             ((x0, y0), (x1, y0), (x1, y1), (x0, y1)), z0, z1)
 
 
+def _rounded_box(component, name, width, height, radius, z0, z1):
+    """Extrude a true rounded-rectangle tablet inspection envelope."""
+    sketch = component.sketches.add(component.xYConstructionPlane)
+    sketch.name = name + " Sketch"
+    point = lambda x, y: adsk.core.Point3D.create(_cm(x), _cm(y), 0)
+    lines = sketch.sketchCurves.sketchLines
+    arcs = sketch.sketchCurves.sketchArcs
+    lines.addByTwoPoints(point(radius, 0), point(width - radius, 0))
+    arcs.addByCenterStartSweep(point(width - radius, radius),
+                               point(width - radius, 0), math.pi / 2)
+    lines.addByTwoPoints(point(width, radius), point(width, height - radius))
+    arcs.addByCenterStartSweep(point(width - radius, height - radius),
+                               point(width, height - radius), math.pi / 2)
+    lines.addByTwoPoints(point(width - radius, height), point(radius, height))
+    arcs.addByCenterStartSweep(point(radius, height - radius),
+                               point(radius, height), math.pi / 2)
+    lines.addByTwoPoints(point(0, height - radius), point(0, radius))
+    arcs.addByCenterStartSweep(point(radius, radius), point(0, radius), math.pi / 2)
+    profile = sketch.profiles.item(0)
+    extrudes = component.features.extrudeFeatures
+    feature_input = extrudes.createInput(
+        profile, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+    feature_input.startExtent = adsk.fusion.OffsetStartDefinition.create(
+        adsk.core.ValueInput.createByString(f"{z0} mm"))
+    feature_input.setOneSideExtent(
+        adsk.fusion.DistanceExtentDefinition.create(
+            adsk.core.ValueInput.createByString(f"{z1 - z0} mm")),
+        adsk.fusion.ExtentDirections.PositiveExtentDirection)
+    body = extrudes.add(feature_input).bodies.item(0)
+    body.name = name
+    return body
+
+
 def _holder_parts(component):
     """Build the open-top rear skeleton, guides, lips, and split lower shelf."""
     x0, x1 = -CLEARANCE_X, DEVICE_W + CLEARANCE_X
@@ -107,6 +142,12 @@ def _holder_parts(component):
     add_box("Back Mid", 18, 92, 0, DEVICE_W - 18, 110, REAR_SUPPORT_MAX_Z)
     add_box("Back Bottom Left", 18, y0, 0, USB_CENTRE_X - USB_POCKET[0] / 2, 18, REAR_SUPPORT_MAX_Z)
     add_box("Back Bottom Right", USB_CENTRE_X + USB_POCKET[0] / 2, y0, 0, DEVICE_W - 18, 18, REAR_SUPPORT_MAX_Z)
+    # A projection-neutral deck provides material for the provisional wall-side
+    # plug recess and cable race.  The recess is cut after all pieces are joined.
+    add_box("PROVISIONAL USB Routing Deck",
+            USB_CENTRE_X - USB_POCKET[0] / 2, y0, 0,
+            USB_CENTRE_X + USB_POCKET[0] / 2,
+            WALL_EXIT_Y + USB_CHANNEL_W / 2, REAR_SUPPORT_MAX_Z)
 
     # These outside-edge spines bridge the deliberate 0.30 mm tablet/rear gap.
     # They sit outside the tablet envelope and preserve the real rear clearance.
@@ -145,13 +186,42 @@ def _join_holder(component, bodies):
     return target
 
 
+def _cut_usb_route(component, holder):
+    """Cut the provisional plug pocket, hidden race, and wall-side exit."""
+    pocket_half = USB_POCKET[0] / 2
+    channel_half = USB_CHANNEL_W / 2
+    cutters = [
+        _box(component, "PROVISIONAL USB-C Plug Pocket Cutter",
+             USB_CENTRE_X - pocket_half, -CLEARANCE_Y, 0,
+             USB_CENTRE_X + pocket_half, USB_POCKET[1], USB_RECESS_DEPTH),
+        _box(component, "PROVISIONAL Hidden Cable Channel Cutter",
+             USB_CENTRE_X - channel_half, USB_POCKET[1], 0,
+             USB_CENTRE_X + channel_half, WALL_EXIT_Y, USB_RECESS_DEPTH),
+        # The exit is open through the holder at the wall-contact plane.  Its
+        # rectangular envelope represents the future plasterboard penetration.
+        _box(component, "PROVISIONAL Wall Exit Cutter",
+             USB_CENTRE_X - channel_half, WALL_EXIT_Y - channel_half, 0,
+             USB_CENTRE_X + channel_half, WALL_EXIT_Y + channel_half,
+             REAR_SUPPORT_MAX_Z),
+    ]
+    tools = adsk.core.ObjectCollection.create()
+    for cutter in cutters:
+        tools.add(cutter)
+    cut_input = component.features.combineFeatures.createInput(holder, tools)
+    cut_input.operation = adsk.fusion.FeatureOperations.CutFeatureOperation
+    cut_input.isKeepToolBodies = False
+    feature = component.features.combineFeatures.add(cut_input)
+    feature.name = "PROVISIONAL USB-C Pocket Channel and Wall Exit"
+    return feature
+
+
 def _create_component(root, name):
     occurrence = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
     occurrence.component.name = name
     return occurrence.component
 
 
-def _validate_and_report(ui, holder_component, holder, envelope_component):
+def _validate_and_report(ui, holder_component, holder, envelope_component, usb_feature):
     if holder_component.bRepBodies.count != 1:
         raise RuntimeError(f"Holder body count is {holder_component.bRepBodies.count}, expected 1")
     if envelope_component is holder_component or envelope_component.bRepBodies.count != 1:
@@ -160,6 +230,14 @@ def _validate_and_report(ui, holder_component, holder, envelope_component):
     max_z = bounds.maxPoint.z * 10.0
     if max_z > TABLET_FRONT_Z + 1e-6:
         raise RuntimeError(f"Holder exceeds tablet front plane: max Z={max_z:.4f} mm")
+    if not usb_feature or not usb_feature.isValid:
+        raise RuntimeError("Provisional USB pocket/channel cut feature is missing or invalid")
+    channel_half = USB_CHANNEL_W / 2
+    if not (0 <= USB_CENTRE_X - channel_half and
+            USB_CENTRE_X + channel_half <= DEVICE_W and
+            0 <= WALL_EXIT_Y - channel_half and
+            WALL_EXIT_Y + channel_half <= DEVICE_H):
+        raise RuntimeError("USB wall exit is not fully behind the tablet outline")
     dimensions = tuple((high - low) * 10.0 for low, high in (
         (bounds.minPoint.x, bounds.maxPoint.x),
         (bounds.minPoint.y, bounds.maxPoint.y),
@@ -198,12 +276,12 @@ def run(context):
         root = design.rootComponent
         holder_component = _create_component(root, COMPONENT_NAME)
         holder = _join_holder(holder_component, _holder_parts(holder_component))
+        usb_feature = _cut_usb_route(holder_component, holder)
         envelope_component = _create_component(root, ENVELOPE_NAME)
-        envelope = _box(envelope_component, "Tablet Envelope", 0, 0, TABLET_REAR_Z,
-                        DEVICE_W, DEVICE_H, TABLET_FRONT_Z)
+        envelope = _rounded_box(envelope_component, "Tablet Envelope", DEVICE_W,
+                                DEVICE_H, DEVICE_R, TABLET_REAR_Z, TABLET_FRONT_Z)
         envelope.isLightBulbOn = True
-        _validate_and_report(ui, holder_component, holder, envelope_component)
+        _validate_and_report(ui, holder_component, holder, envelope_component, usb_feature)
         _export(design, holder_component, holder)
     except Exception:
         ui.messageBox("HALO V2 Fusion generator failed:\n\n" + traceback.format_exc())
-
