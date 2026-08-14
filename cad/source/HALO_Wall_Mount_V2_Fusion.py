@@ -40,6 +40,7 @@ USB_CENTRE_X = 62.0
 WALL_EXIT_Y = 35.0
 USB_CABLE_CLEARANCE_Z = 2.0  # PROVISIONAL until the selected cable is measured.
 USB_BRIDGE_W = 4.5
+FRONT_EDGE_CHAMFER = 0.9
 CAMERA_FROM_REAR_LEFT = 15.5
 CAMERA_FROM_BOTTOM = 196.0
 CAMERA_SIZE = 18.0
@@ -213,7 +214,9 @@ def _cut_usb_route(component, holder):
     # provisional clearance beneath it.  The rest of the channel remains open,
     # including its unobstructed discharge into the large rear skeleton opening.
     bridge_center_y = (USB_POCKET[1] + channel_end_y) / 2
-    bridge = _box(component, "PROVISIONAL USB Cable Retaining Bridge",
+    # This is deliberately one continuous roof solid, not two retention tabs.
+    # Its ends overlap both channel banks, making a closed side-to-side bridge.
+    bridge = _box(component, "PROVISIONAL USB Cable Retaining Bridge Roof",
                   USB_CENTRE_X - pocket_half,
                   bridge_center_y - USB_BRIDGE_W / 2,
                   USB_CABLE_CLEARANCE_Z,
@@ -230,6 +233,33 @@ def _cut_usb_route(component, holder):
     return feature, bridge_feature
 
 
+def _chamfer_long_front_edges(component, holder):
+    """Chamfer only long outer Z=11 edges, away from tablet contact faces."""
+    selected = adsk.core.ObjectCollection.create()
+    tolerance = _cm(0.01)
+    front_z = _cm(TABLET_FRONT_Z)
+    outer_x = (_cm(-CLEARANCE_X - SIDE_W),
+               _cm(DEVICE_W + CLEARANCE_X + SIDE_W))
+    for edge in holder.edges:
+        start = edge.startVertex.geometry
+        end = edge.endVertex.geometry
+        is_front = abs(start.z - front_z) < tolerance and abs(end.z - front_z) < tolerance
+        is_outer = any(abs(start.x - x) < tolerance and abs(end.x - x) < tolerance
+                       for x in outer_x)
+        is_long_y = abs(end.y - start.y) >= _cm(15.0)
+        if is_front and is_outer and is_long_y:
+            selected.add(edge)
+    if selected.count == 0:
+        raise RuntimeError("No exposed long front outer edges found for chamfer")
+    chamfers = component.features.chamferFeatures
+    chamfer_input = chamfers.createInput2()
+    chamfer_input.chamferEdgeSets.addEqualDistanceChamferEdgeSet(
+        selected, adsk.core.ValueInput.createByString(f"{FRONT_EDGE_CHAMFER} mm"), False)
+    feature = chamfers.add(chamfer_input)
+    feature.name = "Subtle Long Front Outer Edge Chamfer"
+    return feature
+
+
 def _create_component(root, name):
     occurrence = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())
     occurrence.component.name = name
@@ -237,7 +267,7 @@ def _create_component(root, name):
 
 
 def _validate_and_report(ui, holder_component, holder, envelope_component,
-                         usb_feature, bridge_feature):
+                         usb_feature, bridge_feature, chamfer_feature):
     if holder_component.bRepBodies.count != 1:
         raise RuntimeError(f"Holder body count is {holder_component.bRepBodies.count}, expected 1")
     if envelope_component is holder_component or envelope_component.bRepBodies.count != 1:
@@ -250,6 +280,8 @@ def _validate_and_report(ui, holder_component, holder, envelope_component,
         raise RuntimeError("Provisional USB pocket/channel cut feature is missing or invalid")
     if not bridge_feature or not bridge_feature.isValid:
         raise RuntimeError("Single transverse USB retaining bridge is missing or invalid")
+    if not chamfer_feature or not chamfer_feature.isValid:
+        raise RuntimeError("Long front outer-edge chamfer is missing or invalid")
     channel_half = USB_CHANNEL_W / 2
     if not (0 <= USB_CENTRE_X - channel_half and
             USB_CENTRE_X + channel_half <= DEVICE_W and
@@ -287,18 +319,35 @@ def _export(design, holder_component, holder):
     return output
 
 
-def _export_rear_detail(app, envelope, output):
-    """Save a Fusion-generated rear/detail view with the cable route exposed."""
-    envelope.isLightBulbOn = False
-    viewport = app.activeViewport
+def _save_view(viewport, path, eye, target, up, extent):
     camera = viewport.camera
-    camera.viewOrientation = adsk.core.ViewOrientations.RearViewOrientation
-    camera.isFitView = True
+    camera.eye = adsk.core.Point3D.create(*(_cm(value) for value in eye))
+    camera.target = adsk.core.Point3D.create(*(_cm(value) for value in target))
+    camera.upVector = adsk.core.Vector3D.create(*up)
+    camera.viewExtents = _cm(extent)
+    camera.isFitView = False
     viewport.camera = camera
     viewport.refresh()
-    detail_path = os.path.join(output, "HALO_Wall_Mount_V2_USB_rear_detail.png")
-    if not viewport.saveAsImageFile(detail_path, 1600, 1200):
-        raise RuntimeError("Rear USB detail image export failed")
+    if not viewport.saveAsImageFile(path, 1600, 1200):
+        raise RuntimeError(f"Fusion detail image export failed: {path}")
+
+
+def _export_inspection_views(app, envelope, output):
+    """Save a bridge close-up and an oblique view of the front edge treatment."""
+    envelope.isLightBulbOn = False
+    viewport = app.activeViewport
+    _save_view(
+        viewport,
+        os.path.join(output, "HALO_Wall_Mount_V2_USB_bridge_closeup.png"),
+        (USB_CENTRE_X, WALL_EXIT_Y, -65),
+        (USB_CENTRE_X, WALL_EXIT_Y, REAR_SUPPORT_MAX_Z / 2),
+        (0, 1, 0), 55)
+    _save_view(
+        viewport,
+        os.path.join(output, "HALO_Wall_Mount_V2_front_edge_oblique.png"),
+        (-175, -120, 150),
+        (DEVICE_W / 2, DEVICE_H / 2, TABLET_FRONT_Z / 2),
+        (0, 0, 1), 270)
     envelope.isLightBulbOn = True
 
 
@@ -313,13 +362,14 @@ def run(context):
         holder_component = _create_component(root, COMPONENT_NAME)
         holder = _join_holder(holder_component, _holder_parts(holder_component))
         usb_feature, bridge_feature = _cut_usb_route(holder_component, holder)
+        chamfer_feature = _chamfer_long_front_edges(holder_component, holder)
         envelope_component = _create_component(root, ENVELOPE_NAME)
         envelope = _rounded_box(envelope_component, "Tablet Envelope", DEVICE_W,
                                 DEVICE_H, DEVICE_R, TABLET_REAR_Z, TABLET_FRONT_Z)
         envelope.isLightBulbOn = True
         _validate_and_report(ui, holder_component, holder, envelope_component,
-                             usb_feature, bridge_feature)
+                             usb_feature, bridge_feature, chamfer_feature)
         output = _export(design, holder_component, holder)
-        _export_rear_detail(app, envelope, output)
+        _export_inspection_views(app, envelope, output)
     except Exception:
         ui.messageBox("HALO V2 Fusion generator failed:\n\n" + traceback.format_exc())

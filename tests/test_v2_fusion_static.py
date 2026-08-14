@@ -67,18 +67,25 @@ class FusionGeneratorStaticTests(unittest.TestCase):
 
     def test_usb_route_has_one_transverse_bridge_and_no_dedicated_exit(self):
         source = FUSION.read_text(encoding="utf-8")
-        self.assertEqual(source.count('"PROVISIONAL USB Cable Retaining Bridge"'), 1)
+        self.assertEqual(source.count('"PROVISIONAL USB Cable Retaining Bridge Roof"'), 1)
         self.assertIn("USB_BRIDGE_W = 4.5", source)
         self.assertIn("USB_CABLE_CLEARANCE_Z", source)
         self.assertIn("bridge_center_y = (USB_POCKET[1] + channel_end_y) / 2", source)
         self.assertIn("PROVISIONAL Single Transverse USB Cable Bridge", source)
         self.assertNotIn("Wall Exit Cutter", source)
 
-    def test_generator_exports_rear_usb_detail_view(self):
+    def test_generator_exports_required_inspection_views(self):
         source = FUSION.read_text(encoding="utf-8")
-        self.assertIn("RearViewOrientation", source)
-        self.assertIn('"HALO_Wall_Mount_V2_USB_rear_detail.png"', source)
+        self.assertIn('"HALO_Wall_Mount_V2_USB_bridge_closeup.png"', source)
+        self.assertIn('"HALO_Wall_Mount_V2_front_edge_oblique.png"', source)
         self.assertIn("saveAsImageFile", source)
+
+    def test_chamfer_targets_only_long_outer_front_edges(self):
+        source = FUSION.read_text(encoding="utf-8")
+        self.assertIn("FRONT_EDGE_CHAMFER = 0.9", source)
+        self.assertIn("def _chamfer_long_front_edges", source)
+        self.assertIn("is_front and is_outer and is_long_y", source)
+        self.assertIn("addEqualDistanceChamferEdgeSet", source)
 
     def test_tablet_envelope_uses_physical_corner_radius(self):
         source = FUSION.read_text(encoding="utf-8")
