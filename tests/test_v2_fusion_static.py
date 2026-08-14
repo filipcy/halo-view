@@ -57,13 +57,13 @@ class FusionGeneratorStaticTests(unittest.TestCase):
     def test_provisional_usb_parameters_drive_real_cut_geometry(self):
         source = FUSION.read_text(encoding="utf-8")
         self.assertIn("def _cut_usb_route", source)
-        self.assertIn('"PROVISIONAL USB-C Plug Pocket Cutter"', source)
-        self.assertIn('"PROVISIONAL Hidden Cable Channel Cutter"', source)
+        self.assertIn('"PROVISIONAL USB-C Plug Pocket"', source)
+        self.assertIn('"PROVISIONAL Hidden Cable Channel"', source)
         self.assertNotIn('"PROVISIONAL Wall Exit Cutter"', source)
         self.assertIn("USB_POCKET[1]", source)
         self.assertIn("USB_CHANNEL_W / 2", source)
         self.assertIn("WALL_EXIT_Y + channel_half <= DEVICE_H", source)
-        self.assertIn("CutFeatureOperation", source)
+        self.assertGreaterEqual(source.count("CutFeatureOperation"), 2)
 
     def test_usb_route_has_one_transverse_bridge_and_no_dedicated_exit(self):
         source = FUSION.read_text(encoding="utf-8")
@@ -72,7 +72,17 @@ class FusionGeneratorStaticTests(unittest.TestCase):
         self.assertIn("USB_CABLE_CLEARANCE_Z", source)
         self.assertIn("bridge_center_y = (USB_POCKET[1] + channel_end_y) / 2", source)
         self.assertIn("PROVISIONAL Single Transverse USB Cable Bridge", source)
+        self.assertIn("adsk.fusion.FeatureOperations.JoinFeatureOperation", source)
         self.assertNotIn("Wall Exit Cutter", source)
+
+    def test_usb_features_do_not_leave_helper_brep_bodies(self):
+        source = FUSION.read_text(encoding="utf-8")
+        route = source[source.index("def _cut_usb_route"):source.index("def _chamfer_long_front_edges")]
+        self.assertNotIn("combineFeatures.createInput", route)
+        self.assertNotIn("NewBodyFeatureOperation", route)
+        self.assertIn("CutFeatureOperation", route)
+        self.assertIn("JoinFeatureOperation", route)
+        self.assertIn("holder_component.bRepBodies.count != 1", source)
 
     def test_generator_exports_required_inspection_views(self):
         source = FUSION.read_text(encoding="utf-8")

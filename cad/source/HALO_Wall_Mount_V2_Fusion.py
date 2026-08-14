@@ -58,8 +58,8 @@ def _cm(mm):
     return mm / 10.0
 
 
-def _extrude_polygon(component, name, points, z0, z1):
-    """Create a native sketch/extrude feature and return its new BRep body."""
+def _extrude_polygon_feature(component, name, points, z0, z1, operation):
+    """Create a native polygon extrusion using the requested feature operation."""
     sketch = component.sketches.add(component.xYConstructionPlane)
     sketch.name = name + " Sketch"
     lines = sketch.sketchCurves.sketchLines
@@ -68,8 +68,7 @@ def _extrude_polygon(component, name, points, z0, z1):
         lines.addByTwoPoints(vertex, vertices[(index + 1) % len(vertices)])
     profile = sketch.profiles.item(0)
     extrudes = component.features.extrudeFeatures
-    feature_input = extrudes.createInput(
-        profile, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+    feature_input = extrudes.createInput(profile, operation)
     feature_input.startExtent = adsk.fusion.OffsetStartDefinition.create(
         adsk.core.ValueInput.createByString(f"{z0} mm"))
     feature_input.setOneSideExtent(
@@ -77,6 +76,15 @@ def _extrude_polygon(component, name, points, z0, z1):
             adsk.core.ValueInput.createByString(f"{z1 - z0} mm")),
         adsk.fusion.ExtentDirections.PositiveExtentDirection)
     feature = extrudes.add(feature_input)
+    feature.name = name + " Extrude"
+    return feature
+
+
+def _extrude_polygon(component, name, points, z0, z1):
+    """Create a native sketch/extrude feature and return its new BRep body."""
+    feature = _extrude_polygon_feature(
+        component, name, points, z0, z1,
+        adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
     body = feature.bodies.item(0)
     body.name = name
     return body
@@ -85,6 +93,12 @@ def _extrude_polygon(component, name, points, z0, z1):
 def _box(component, name, x0, y0, z0, x1, y1, z1):
     return _extrude_polygon(component, name,
                             ((x0, y0), (x1, y0), (x1, y1), (x0, y1)), z0, z1)
+
+
+def _feature_box(component, name, x0, y0, z0, x1, y1, z1, operation):
+    return _extrude_polygon_feature(
+        component, name, ((x0, y0), (x1, y0), (x1, y1), (x0, y1)),
+        z0, z1, operation)
 
 
 def _rounded_box(component, name, width, height, radius, z0, z1):
@@ -193,22 +207,18 @@ def _cut_usb_route(component, holder):
     pocket_half = USB_POCKET[0] / 2
     channel_half = USB_CHANNEL_W / 2
     channel_end_y = WALL_EXIT_Y + channel_half
-    cutters = [
-        _box(component, "PROVISIONAL USB-C Plug Pocket Cutter",
-             USB_CENTRE_X - pocket_half, -CLEARANCE_Y, 0,
-             USB_CENTRE_X + pocket_half, USB_POCKET[1], REAR_SUPPORT_MAX_Z),
-        _box(component, "PROVISIONAL Hidden Cable Channel Cutter",
-             USB_CENTRE_X - channel_half, USB_POCKET[1], 0,
-             USB_CENTRE_X + channel_half, channel_end_y, REAR_SUPPORT_MAX_Z),
-    ]
-    tools = adsk.core.ObjectCollection.create()
-    for cutter in cutters:
-        tools.add(cutter)
-    cut_input = component.features.combineFeatures.createInput(holder, tools)
-    cut_input.operation = adsk.fusion.FeatureOperations.CutFeatureOperation
-    cut_input.isKeepToolBodies = False
-    feature = component.features.combineFeatures.add(cut_input)
-    feature.name = "PROVISIONAL USB-C Pocket and Open Rear Channel"
+    # Direct Cut extrusions modify the unified holder in place and cannot leave
+    # independent cutter BRep bodies behind in the holder component.
+    pocket_feature = _feature_box(
+        component, "PROVISIONAL USB-C Plug Pocket",
+        USB_CENTRE_X - pocket_half, -CLEARANCE_Y, 0,
+        USB_CENTRE_X + pocket_half, USB_POCKET[1], REAR_SUPPORT_MAX_Z,
+        adsk.fusion.FeatureOperations.CutFeatureOperation)
+    channel_feature = _feature_box(
+        component, "PROVISIONAL Hidden Cable Channel",
+        USB_CENTRE_X - channel_half, USB_POCKET[1], 0,
+        USB_CENTRE_X + channel_half, channel_end_y, REAR_SUPPORT_MAX_Z,
+        adsk.fusion.FeatureOperations.CutFeatureOperation)
 
     # One transverse roof retains the cable while preserving the complete
     # provisional clearance beneath it.  The rest of the channel remains open,
@@ -216,21 +226,17 @@ def _cut_usb_route(component, holder):
     bridge_center_y = (USB_POCKET[1] + channel_end_y) / 2
     # This is deliberately one continuous roof solid, not two retention tabs.
     # Its ends overlap both channel banks, making a closed side-to-side bridge.
-    bridge = _box(component, "PROVISIONAL USB Cable Retaining Bridge Roof",
-                  USB_CENTRE_X - pocket_half,
-                  bridge_center_y - USB_BRIDGE_W / 2,
-                  USB_CABLE_CLEARANCE_Z,
-                  USB_CENTRE_X + pocket_half,
-                  bridge_center_y + USB_BRIDGE_W / 2,
-                  REAR_SUPPORT_MAX_Z)
-    tools = adsk.core.ObjectCollection.create()
-    tools.add(bridge)
-    join_input = component.features.combineFeatures.createInput(holder, tools)
-    join_input.operation = adsk.fusion.FeatureOperations.JoinFeatureOperation
-    join_input.isKeepToolBodies = False
-    bridge_feature = component.features.combineFeatures.add(join_input)
+    bridge_feature = _feature_box(
+        component, "PROVISIONAL USB Cable Retaining Bridge Roof",
+        USB_CENTRE_X - pocket_half,
+        bridge_center_y - USB_BRIDGE_W / 2,
+        USB_CABLE_CLEARANCE_Z,
+        USB_CENTRE_X + pocket_half,
+        bridge_center_y + USB_BRIDGE_W / 2,
+        REAR_SUPPORT_MAX_Z,
+        adsk.fusion.FeatureOperations.JoinFeatureOperation)
     bridge_feature.name = "PROVISIONAL Single Transverse USB Cable Bridge"
-    return feature, bridge_feature
+    return (pocket_feature, channel_feature), bridge_feature
 
 
 def _chamfer_long_front_edges(component, holder):
@@ -276,8 +282,9 @@ def _validate_and_report(ui, holder_component, holder, envelope_component,
     max_z = bounds.maxPoint.z * 10.0
     if max_z > TABLET_FRONT_Z + 1e-6:
         raise RuntimeError(f"Holder exceeds tablet front plane: max Z={max_z:.4f} mm")
-    if not usb_feature or not usb_feature.isValid:
-        raise RuntimeError("Provisional USB pocket/channel cut feature is missing or invalid")
+    if (len(usb_feature) != 2 or
+            any(not feature or not feature.isValid for feature in usb_feature)):
+        raise RuntimeError("Provisional USB pocket/channel cut features are missing or invalid")
     if not bridge_feature or not bridge_feature.isValid:
         raise RuntimeError("Single transverse USB retaining bridge is missing or invalid")
     if not chamfer_feature or not chamfer_feature.isValid:
