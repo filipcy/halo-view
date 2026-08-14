@@ -89,10 +89,16 @@ class FusionGeneratorStaticTests(unittest.TestCase):
     def test_one_body_failure_reports_each_remaining_body(self):
         source = FUSION.read_text(encoding="utf-8")
         self.assertIn("def _body_diagnostics", source)
-        self.assertIn("body.physicalProperties.volume", source)
-        self.assertIn("measureMinimumDistance(main_holder, body)", source)
+        self.assertIn("body.volume", source)
+        self.assertIn("body.getPhysicalProperties().volume", source)
+        self.assertNotIn("MeasureManager.get", source)
+        self.assertIn("body.isSolid", source)
         self.assertIn("bounds.minPoint.x", source)
         self.assertIn("bounds.maxPoint.z", source)
+        self.assertIn("size XYZ mm", source)
+        message_box = source.index("ui.messageBox(", source.index("def _validate_and_report"))
+        body_error = source.index("raise RuntimeError(", message_box)
+        self.assertLess(message_box, body_error)
 
     def test_generator_exports_required_inspection_views(self):
         source = FUSION.read_text(encoding="utf-8")

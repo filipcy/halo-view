@@ -280,10 +280,9 @@ def _create_component(root, name):
     return occurrence.component
 
 
-def _body_diagnostics(component, main_holder):
+def _body_diagnostics(component):
     """Return detailed failure-only diagnostics for unexpected holder bodies."""
     lines = []
-    measure = adsk.core.MeasureManager.get()
     for index in range(component.bRepBodies.count):
         body = component.bRepBodies.item(index)
         bounds = body.boundingBox
@@ -291,28 +290,31 @@ def _body_diagnostics(component, main_holder):
                         (bounds.minPoint.x, bounds.minPoint.y, bounds.minPoint.z))
         maximum = tuple(value * 10.0 for value in
                         (bounds.maxPoint.x, bounds.maxPoint.y, bounds.maxPoint.z))
+        size = tuple(high - low for low, high in zip(minimum, maximum))
         try:
-            volume = f"{body.physicalProperties.volume * 1000.0:.3f} mm^3"
+            volume = body.volume
         except Exception:
-            volume = "unavailable"
-        if body is main_holder:
-            contact = "main holder"
-        else:
             try:
-                distance = measure.measureMinimumDistance(main_holder, body).value * 10.0
-                contact = f"touches/intersects={distance <= 1e-6} (gap={distance:.6f} mm)"
+                volume = body.getPhysicalProperties().volume
             except Exception:
-                contact = "touch/intersection unavailable"
+                volume = None
+        volume_text = f"{volume:.6f} cm^3" if volume is not None else "unavailable"
         lines.append(
-            f"[{index}] {body.name}: min={minimum}, max={maximum}, "
-            f"volume={volume}, {contact}")
+            f"[{index}] name={body.name!r}, isSolid={body.isSolid}\n"
+            f"  min XYZ mm=({minimum[0]:.3f}, {minimum[1]:.3f}, {minimum[2]:.3f})\n"
+            f"  max XYZ mm=({maximum[0]:.3f}, {maximum[1]:.3f}, {maximum[2]:.3f})\n"
+            f"  size XYZ mm=({size[0]:.3f}, {size[1]:.3f}, {size[2]:.3f})\n"
+            f"  volume={volume_text}")
     return "\n".join(lines)
 
 
 def _validate_and_report(ui, holder_component, holder, envelope_component,
                          usb_feature, bridge_feature, chamfer_feature):
     if holder_component.bRepBodies.count != 1:
-        details = _body_diagnostics(holder_component, holder)
+        details = _body_diagnostics(holder_component)
+        ui.messageBox(
+            details,
+            f"Holder body count is {holder_component.bRepBodies.count}, expected 1")
         raise RuntimeError(
             f"Holder body count is {holder_component.bRepBodies.count}, expected 1\n{details}")
     if envelope_component is holder_component or envelope_component.bRepBodies.count != 1:
