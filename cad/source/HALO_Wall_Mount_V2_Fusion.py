@@ -38,7 +38,8 @@ USB_POCKET = (22.0, 30.0)  # PROVISIONAL: verify against the selected adapter.
 USB_CHANNEL_W = 12.0
 USB_CENTRE_X = 62.0
 WALL_EXIT_Y = 35.0
-USB_RECESS_DEPTH = 2.0  # PROVISIONAL wall-side recess; retain 0.7 mm cover.
+USB_CABLE_CLEARANCE_Z = 2.0  # PROVISIONAL until the selected cable is measured.
+USB_BRIDGE_W = 4.5
 CAMERA_FROM_REAR_LEFT = 15.5
 CAMERA_FROM_BOTTOM = 196.0
 CAMERA_SIZE = 18.0
@@ -187,22 +188,17 @@ def _join_holder(component, bodies):
 
 
 def _cut_usb_route(component, holder):
-    """Cut the provisional plug pocket, hidden race, and wall-side exit."""
+    """Cut the provisional plug pocket and channel into the open rear area."""
     pocket_half = USB_POCKET[0] / 2
     channel_half = USB_CHANNEL_W / 2
+    channel_end_y = WALL_EXIT_Y + channel_half
     cutters = [
         _box(component, "PROVISIONAL USB-C Plug Pocket Cutter",
              USB_CENTRE_X - pocket_half, -CLEARANCE_Y, 0,
-             USB_CENTRE_X + pocket_half, USB_POCKET[1], USB_RECESS_DEPTH),
+             USB_CENTRE_X + pocket_half, USB_POCKET[1], REAR_SUPPORT_MAX_Z),
         _box(component, "PROVISIONAL Hidden Cable Channel Cutter",
              USB_CENTRE_X - channel_half, USB_POCKET[1], 0,
-             USB_CENTRE_X + channel_half, WALL_EXIT_Y, USB_RECESS_DEPTH),
-        # The exit is open through the holder at the wall-contact plane.  Its
-        # rectangular envelope represents the future plasterboard penetration.
-        _box(component, "PROVISIONAL Wall Exit Cutter",
-             USB_CENTRE_X - channel_half, WALL_EXIT_Y - channel_half, 0,
-             USB_CENTRE_X + channel_half, WALL_EXIT_Y + channel_half,
-             REAR_SUPPORT_MAX_Z),
+             USB_CENTRE_X + channel_half, channel_end_y, REAR_SUPPORT_MAX_Z),
     ]
     tools = adsk.core.ObjectCollection.create()
     for cutter in cutters:
@@ -211,8 +207,27 @@ def _cut_usb_route(component, holder):
     cut_input.operation = adsk.fusion.FeatureOperations.CutFeatureOperation
     cut_input.isKeepToolBodies = False
     feature = component.features.combineFeatures.add(cut_input)
-    feature.name = "PROVISIONAL USB-C Pocket Channel and Wall Exit"
-    return feature
+    feature.name = "PROVISIONAL USB-C Pocket and Open Rear Channel"
+
+    # One transverse roof retains the cable while preserving the complete
+    # provisional clearance beneath it.  The rest of the channel remains open,
+    # including its unobstructed discharge into the large rear skeleton opening.
+    bridge_center_y = (USB_POCKET[1] + channel_end_y) / 2
+    bridge = _box(component, "PROVISIONAL USB Cable Retaining Bridge",
+                  USB_CENTRE_X - pocket_half,
+                  bridge_center_y - USB_BRIDGE_W / 2,
+                  USB_CABLE_CLEARANCE_Z,
+                  USB_CENTRE_X + pocket_half,
+                  bridge_center_y + USB_BRIDGE_W / 2,
+                  REAR_SUPPORT_MAX_Z)
+    tools = adsk.core.ObjectCollection.create()
+    tools.add(bridge)
+    join_input = component.features.combineFeatures.createInput(holder, tools)
+    join_input.operation = adsk.fusion.FeatureOperations.JoinFeatureOperation
+    join_input.isKeepToolBodies = False
+    bridge_feature = component.features.combineFeatures.add(join_input)
+    bridge_feature.name = "PROVISIONAL Single Transverse USB Cable Bridge"
+    return feature, bridge_feature
 
 
 def _create_component(root, name):
@@ -221,7 +236,8 @@ def _create_component(root, name):
     return occurrence.component
 
 
-def _validate_and_report(ui, holder_component, holder, envelope_component, usb_feature):
+def _validate_and_report(ui, holder_component, holder, envelope_component,
+                         usb_feature, bridge_feature):
     if holder_component.bRepBodies.count != 1:
         raise RuntimeError(f"Holder body count is {holder_component.bRepBodies.count}, expected 1")
     if envelope_component is holder_component or envelope_component.bRepBodies.count != 1:
@@ -232,12 +248,16 @@ def _validate_and_report(ui, holder_component, holder, envelope_component, usb_f
         raise RuntimeError(f"Holder exceeds tablet front plane: max Z={max_z:.4f} mm")
     if not usb_feature or not usb_feature.isValid:
         raise RuntimeError("Provisional USB pocket/channel cut feature is missing or invalid")
+    if not bridge_feature or not bridge_feature.isValid:
+        raise RuntimeError("Single transverse USB retaining bridge is missing or invalid")
     channel_half = USB_CHANNEL_W / 2
     if not (0 <= USB_CENTRE_X - channel_half and
             USB_CENTRE_X + channel_half <= DEVICE_W and
-            0 <= WALL_EXIT_Y - channel_half and
-            WALL_EXIT_Y + channel_half <= DEVICE_H):
-        raise RuntimeError("USB wall exit is not fully behind the tablet outline")
+            USB_POCKET[1] < WALL_EXIT_Y + channel_half <= DEVICE_H):
+        raise RuntimeError("USB channel does not discharge behind the tablet outline")
+    if not (4.0 <= USB_BRIDGE_W <= 5.0 and
+            USB_CABLE_CLEARANCE_Z < REAR_SUPPORT_MAX_Z):
+        raise RuntimeError("USB bridge width or under-bridge clearance is invalid")
     dimensions = tuple((high - low) * 10.0 for low, high in (
         (bounds.minPoint.x, bounds.maxPoint.x),
         (bounds.minPoint.y, bounds.maxPoint.y),
@@ -264,6 +284,22 @@ def _export(design, holder_component, holder):
     stl_options.meshRefinement = adsk.fusion.MeshRefinementSettings.MeshRefinementHigh
     if not manager.execute(stl_options):
         raise RuntimeError("STL export failed")
+    return output
+
+
+def _export_rear_detail(app, envelope, output):
+    """Save a Fusion-generated rear/detail view with the cable route exposed."""
+    envelope.isLightBulbOn = False
+    viewport = app.activeViewport
+    camera = viewport.camera
+    camera.viewOrientation = adsk.core.ViewOrientations.RearViewOrientation
+    camera.isFitView = True
+    viewport.camera = camera
+    viewport.refresh()
+    detail_path = os.path.join(output, "HALO_Wall_Mount_V2_USB_rear_detail.png")
+    if not viewport.saveAsImageFile(detail_path, 1600, 1200):
+        raise RuntimeError("Rear USB detail image export failed")
+    envelope.isLightBulbOn = True
 
 
 def run(context):
@@ -276,12 +312,14 @@ def run(context):
         root = design.rootComponent
         holder_component = _create_component(root, COMPONENT_NAME)
         holder = _join_holder(holder_component, _holder_parts(holder_component))
-        usb_feature = _cut_usb_route(holder_component, holder)
+        usb_feature, bridge_feature = _cut_usb_route(holder_component, holder)
         envelope_component = _create_component(root, ENVELOPE_NAME)
         envelope = _rounded_box(envelope_component, "Tablet Envelope", DEVICE_W,
                                 DEVICE_H, DEVICE_R, TABLET_REAR_Z, TABLET_FRONT_Z)
         envelope.isLightBulbOn = True
-        _validate_and_report(ui, holder_component, holder, envelope_component, usb_feature)
-        _export(design, holder_component, holder)
+        _validate_and_report(ui, holder_component, holder, envelope_component,
+                             usb_feature, bridge_feature)
+        output = _export(design, holder_component, holder)
+        _export_rear_detail(app, envelope, output)
     except Exception:
         ui.messageBox("HALO V2 Fusion generator failed:\n\n" + traceback.format_exc())
