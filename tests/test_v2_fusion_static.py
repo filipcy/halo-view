@@ -1,0 +1,59 @@
+"""Static parity checks; Autodesk Fusion itself is not available in CI."""
+import ast
+import importlib.util
+from pathlib import Path
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+REVIEW = ROOT / "cad/source/HALO_Wall_Mount_V2.py"
+FUSION = ROOT / "cad/source/HALO_Wall_Mount_V2_Fusion.py"
+
+
+def literal_constants(path):
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    values = {}
+    def record(target, value):
+        if isinstance(target, ast.Name):
+            values[target.id] = value
+        elif isinstance(target, (ast.Tuple, ast.List)):
+            for child, item in zip(target.elts, value):
+                record(child, item)
+
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            try:
+                value = ast.literal_eval(node.value)
+                for target in node.targets:
+                    record(target, value)
+            except (ValueError, TypeError):
+                pass
+    return values
+
+
+class FusionGeneratorStaticTests(unittest.TestCase):
+    def test_validated_literal_parameters_match_review_generator(self):
+        fusion = literal_constants(FUSION)
+        spec = importlib.util.spec_from_file_location("halo_v2_review_for_parity", REVIEW)
+        review = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(review)
+        names = ("DEVICE_W", "DEVICE_H", "DEVICE_T", "DEVICE_R", "WALL_CONTACT_Z",
+                 "TABLET_REAR_Z", "REAR_CLEARANCE_Z", "REAR_SUPPORT_MAX_Z",
+                 "TABLET_FRONT_Z", "SIDE_W", "SHELF_H", "LIP_OVERLAP", "LIP_T",
+                 "RETAINER_MIN_Z", "RETAINER_MAX_Z", "EDGE_CHAMFER", "BUTTON_SHIFT")
+        for name in names:
+            self.assertEqual(fusion[name], getattr(review, name), name)
+
+    def test_fusion_api_and_delivery_contract_are_present(self):
+        source = FUSION.read_text(encoding="utf-8")
+        self.assertIn("import adsk.core", source)
+        self.assertIn("import adsk.fusion", source)
+        self.assertIn('COMPONENT_NAME = "HALO_Wall_Mount_V2"', source)
+        self.assertIn('ENVELOPE_NAME = "TabletEnvelope"', source)
+        self.assertIn('"HALO_Wall_Mount_V2.step"', source)
+        self.assertIn('"HALO_Wall_Mount_V2.stl"', source)
+        self.assertIn("combineFeatures", source)
+
+
+if __name__ == "__main__":
+    unittest.main()
