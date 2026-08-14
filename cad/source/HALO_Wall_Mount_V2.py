@@ -9,9 +9,11 @@ import math
 
 DEVICE_W, DEVICE_H, DEVICE_T, DEVICE_R = 125.0, 211.0, 8.0, 8.5
 CLEARANCE_X = CLEARANCE_Y = 0.20       # physically validated Rev A fit
-BACK_T = 3.0                            # wall -> tablet rear
 WALL_CONTACT_Z = 0.0
-TABLET_REAR_Z = WALL_CONTACT_Z + BACK_T
+TABLET_REAR_Z = 3.0                     # installed tablet datum, not support thickness
+REAR_CLEARANCE_Z = 0.30                 # physically validated Rev A rear clearance
+REAR_SUPPORT_MAX_Z = TABLET_REAR_Z - REAR_CLEARANCE_Z
+REAR_SUPPORT_T = REAR_SUPPORT_MAX_Z - WALL_CONTACT_Z
 TABLET_FRONT_Z = TABLET_REAR_Z + DEVICE_T
 # Preserve the Rev A 8.6 mm Z-clearance concept as a reference envelope, while
 # constraining every printable V2 feature to the real 8 mm tablet thickness.
@@ -61,22 +63,22 @@ def solids():
     x0, x1, y0, y1 = -CLEARANCE_X, DEVICE_W + CLEARANCE_X, -CLEARANCE_Y, DEVICE_H + CLEARANCE_Y
     parts = [
         # Projection-neutral rear skeleton. The open centre is not a chamber.
-        box("back-left", x0, y0, 0, 18, y1, BACK_T),
+        box("back-left", x0, y0, WALL_CONTACT_Z, 18, y1, REAR_SUPPORT_MAX_Z),
         # Right rear rail is split around the correctly oriented camera relief.
-        box("back-right-low", DEVICE_W - 18, y0, 0, x1, CAMERA_CENTER_Y - CAMERA_SIZE / 2, BACK_T),
-        box("back-right-high", DEVICE_W - 18, CAMERA_CENTER_Y + CAMERA_SIZE / 2, 0, x1, y1, BACK_T),
+        box("back-right-low", DEVICE_W - 18, y0, WALL_CONTACT_Z, x1, CAMERA_CENTER_Y - CAMERA_SIZE / 2, REAR_SUPPORT_MAX_Z),
+        box("back-right-high", DEVICE_W - 18, CAMERA_CENTER_Y + CAMERA_SIZE / 2, WALL_CONTACT_Z, x1, y1, REAR_SUPPORT_MAX_Z),
         box("camera-relief-floor", DEVICE_W - 18, CAMERA_CENTER_Y - CAMERA_SIZE / 2, 0,
             CAMERA_CENTER_X + CAMERA_SIZE / 2, CAMERA_CENTER_Y + CAMERA_SIZE / 2,
-            BACK_T - CAMERA_RELIEF_DEPTH),
+            REAR_SUPPORT_MAX_Z - CAMERA_RELIEF_DEPTH),
         box("camera-relief-outer-rail", CAMERA_CENTER_X + CAMERA_SIZE / 2,
-            CAMERA_CENTER_Y - CAMERA_SIZE / 2, 0, x1,
-            CAMERA_CENTER_Y + CAMERA_SIZE / 2, BACK_T),
+            CAMERA_CENTER_Y - CAMERA_SIZE / 2, WALL_CONTACT_Z, x1,
+            CAMERA_CENTER_Y + CAMERA_SIZE / 2, REAR_SUPPORT_MAX_Z),
         prism("back-top-chamfered", [(18, DEVICE_H - 18), (DEVICE_W - 18, DEVICE_H - 18),
               (DEVICE_W - 18, y1 - EDGE_CHAMFER), (DEVICE_W - 18 - EDGE_CHAMFER, y1),
-              (18 + EDGE_CHAMFER, y1), (18, y1 - EDGE_CHAMFER)], 0, BACK_T),
-        box("back-mid", 18, 92, 0, DEVICE_W - 18, 110, BACK_T),
-        box("back-bottom-left", 18, y0, 0, USB_CENTRE_X - USB_POCKET[0] / 2, 18, BACK_T),
-        box("back-bottom-right", USB_CENTRE_X + USB_POCKET[0] / 2, y0, 0, DEVICE_W - 18, 18, BACK_T),
+              (18 + EDGE_CHAMFER, y1), (18, y1 - EDGE_CHAMFER)], WALL_CONTACT_Z, REAR_SUPPORT_MAX_Z),
+        box("back-mid", 18, 92, WALL_CONTACT_Z, DEVICE_W - 18, 110, REAR_SUPPORT_MAX_Z),
+        box("back-bottom-left", 18, y0, WALL_CONTACT_Z, USB_CENTRE_X - USB_POCKET[0] / 2, 18, REAR_SUPPORT_MAX_Z),
+        box("back-bottom-right", USB_CENTRE_X + USB_POCKET[0] / 2, y0, WALL_CONTACT_Z, DEVICE_W - 18, 18, REAR_SUPPORT_MAX_Z),
         # Left guide and its minimal front safety lip.
         box("guide-left", x0 - SIDE_W, y0, TABLET_REAR_Z, x0, y1, TABLET_FRONT_Z),
         box("lip-left", x0 - SIDE_W, y0, RETAINER_MIN_Z, LIP_OVERLAP, y1, RETAINER_MAX_Z),
@@ -159,7 +161,7 @@ def views():
     side='''<path d="M260 85h16v470h-16z"/><path d="M276 85h34v470h-34z" fill="#303236"/><path d="M310 85h12v470h-12z"/><path d="M308 85h14v470h-14z" fill="#555"/><path d="M220 555h145" stroke="#999"/><path d="M260 570v-30M310 570v-30M260 568h50" stroke="#333"/><text x="280" y="590" fill="#222" stroke="none">11.0 to tablet + retainer front</text>'''
     top='''<path d="M145 260h530v24H145z"/><path d="M157 284h506v138H157z" fill="#303236"/><path d="M145 422h530v15H145z"/><path d="M135 260h10v177h-10zM675 260h10v177h-10z" fill="#222"/>'''
     bottom='''<path d="M145 260h202v177H145zM473 260h202v177H473z"/><rect x="347" y="300" width="126" height="137" fill="#f4f4f2" stroke="#d8a737" stroke-width="5"/><path d="M410 300v-70" stroke="#d8a737" stroke-width="12"/><text x="323" y="470" fill="#222" stroke="none">90° USB-C pocket</text>'''
-    section='''<rect x="90" y="95" width="28" height="430" fill="#ddd"/><rect x="118" y="125" width="78" height="370"/><rect x="196" y="125" width="208" height="370" fill="#303236"/><rect x="384" y="125" width="20" height="370" fill="#555"/><path d="M90 555v-35M404 555v-35M90 548h314" stroke="#333"/><text x="205" y="580" fill="#222" stroke="none">11.0 wall → actual tablet / retainer front</text><text x="95" y="80" fill="#222" stroke="none">wall</text><text x="130" y="115" fill="#222" stroke="none">3.0 back</text><text x="255" y="115" fill="#222" stroke="none">8.0 tablet</text><text x="350" y="105" fill="#222" stroke="none">retainer Z 10.2–11.0</text>'''
+    section='''<rect x="90" y="95" width="28" height="430" fill="#ddd"/><rect x="118" y="125" width="70" height="370"/><rect x="188" y="125" width="8" height="370" fill="#d8a737"/><rect x="196" y="125" width="208" height="370" fill="#303236"/><rect x="384" y="125" width="20" height="370" fill="#555"/><path d="M90 555v-35M404 555v-35M90 548h314" stroke="#333"/><text x="205" y="580" fill="#222" stroke="none">11.0 wall → actual tablet / retainer front</text><text x="95" y="80" fill="#222" stroke="none">wall</text><text x="118" y="115" fill="#222" stroke="none">2.7 support</text><text x="160" y="515" fill="#222" stroke="none">0.30 rear clearance</text><text x="255" y="115" fill="#222" stroke="none">8.0 tablet</text><text x="350" y="105" fill="#222" stroke="none">retainer Z 10.2–11.0</text>'''
     usb='''<rect x="120" y="80" width="580" height="430" rx="18"/><rect x="270" y="350" width="280" height="160" fill="#303236"/><rect x="345" y="410" width="130" height="100" fill="#f4f4f2" stroke="#d8a737" stroke-width="6"/><path d="M410 410v-145q0-45 45-45h80" fill="none" stroke="#d8a737" stroke-width="18"/><circle cx="535" cy="220" r="34" fill="#f4f4f2" stroke="#d8a737" stroke-width="6"/><text x="500" y="170" fill="#222" stroke="none">wall exit</text><text x="310" y="545" fill="#222" stroke="none">22 × 30 plug envelope</text>'''
     svg('01_front.svg','1 · Front',front); svg('02_rear.svg','2 · Rear skeleton + hidden cable route',back)
     svg('03_left.svg','3 · Left side',side); svg('04_right.svg','4 · Right side · button opening 22 mm lower',side)

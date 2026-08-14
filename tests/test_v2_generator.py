@@ -19,6 +19,11 @@ class V2GeneratorGuards(unittest.TestCase):
         self.assertEqual(V2.VALIDATED_POCKET_DEPTH, 8.6)
         self.assertEqual(V2.GUIDE_DEPTH, 8.6)
         self.assertEqual(V2.PRINTABLE_FORWARD_DEPTH, 8.0)
+        self.assertEqual(V2.TABLET_REAR_Z, 3.0)
+        self.assertEqual(V2.REAR_CLEARANCE_Z, 0.30)
+        self.assertEqual(V2.REAR_SUPPORT_MAX_Z, 2.7)
+        self.assertAlmostEqual(
+            V2.TABLET_REAR_Z - V2.REAR_SUPPORT_MAX_Z, 0.30, places=9)
 
     def test_projection_and_retention_targets(self):
         self.assertEqual(V2.WALL_CONTACT_Z, 0.0)
@@ -58,6 +63,15 @@ class V2GeneratorGuards(unittest.TestCase):
             self.assertLessEqual(
                 V2.solid_max_z(part), V2.TABLET_FRONT_Z, part[0])
         self.assertEqual(maximum_z, 11.0)
+
+    def test_actual_rear_support_geometry_preserves_clearance(self):
+        rear_supports = [part for part in V2.solids()
+                         if part[0].startswith(("back-", "camera-relief-"))]
+        self.assertTrue(rear_supports)
+        for part in rear_supports:
+            self.assertLessEqual(
+                V2.solid_max_z(part), V2.REAR_SUPPORT_MAX_Z, part[0])
+        self.assertEqual(max(V2.solid_max_z(part) for part in rear_supports), 2.7)
 
     def test_camera_is_rear_view_left_not_mirrored_rev_a_side(self):
         self.assertEqual(V2.CAMERA_CENTER_X,

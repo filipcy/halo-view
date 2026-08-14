@@ -2,7 +2,7 @@
 
 V2 preserves the physically selected Rev A tablet envelope and sliding fit:
 125 × 211 × 8 mm, R8.5 corners, 0.20 mm X/Y clearance and 0.30 mm depth
-clearance per face. The old 18 mm enclosure stack is replaced by a 3 mm rear
+clearance per face. The old 18 mm enclosure stack is replaced by a slim rear
 skeleton directly against the wall. The 11 mm dimension is explicitly measured
 from the wall-contact plane (Z=0) to the actual front surface of the 8 mm tablet
 (Z=3+8), not to a clearance-envelope or printed-retainer face.
@@ -11,6 +11,10 @@ The physically validated 8.6 mm Rev A pocket-depth assumption remains recorded
 as `VALIDATED_POCKET_DEPTH`, but it is not used as a printable V2 forward
 extent. Guides and shelves occupy the real tablet envelope from Z=3.0 to
 Z=11.0 mm. The true maximum Z across every generated holder solid is 11.0 mm.
+
+The tablet rear datum remains Z=3.0 mm, but the tablet-facing rear skeleton ends
+at Z=2.7 mm. These are deliberately separate concepts: the resulting physical
+rear clearance is 0.30 mm without moving the tablet or increasing projection.
 
 The top is open. A split 3 mm bottom shelf carries the tablet; 1.25 mm side lips
 prevent forward release while leaving the Samsung bezel dominant. The right
