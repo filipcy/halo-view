@@ -827,72 +827,72 @@ solid HALO_Wall_Mount_V2
  endfacet
  facet normal 0 0 1
   outer loop
-   vertex -3.2 -0.2 11.6
-   vertex -0.2 -0.2 11.6
-   vertex -0.2 211.2 11.6
+   vertex -3.2 -0.2 11
+   vertex -0.2 -0.2 11
+   vertex -0.2 211.2 11
   endloop
  endfacet
  facet normal 0 0 1
   outer loop
-   vertex -3.2 -0.2 11.6
-   vertex -0.2 211.2 11.6
-   vertex -3.2 211.2 11.6
+   vertex -3.2 -0.2 11
+   vertex -0.2 211.2 11
+   vertex -3.2 211.2 11
   endloop
  endfacet
  facet normal 0 -1 0
   outer loop
    vertex -3.2 -0.2 3
    vertex -0.2 -0.2 3
-   vertex -0.2 -0.2 11.6
+   vertex -0.2 -0.2 11
   endloop
  endfacet
  facet normal 0 -1 0
   outer loop
    vertex -3.2 -0.2 3
-   vertex -0.2 -0.2 11.6
-   vertex -3.2 -0.2 11.6
+   vertex -0.2 -0.2 11
+   vertex -3.2 -0.2 11
   endloop
  endfacet
  facet normal 1 0 0
   outer loop
    vertex -0.2 -0.2 3
    vertex -0.2 211.2 3
-   vertex -0.2 211.2 11.6
+   vertex -0.2 211.2 11
   endloop
  endfacet
  facet normal 1 0 0
   outer loop
    vertex -0.2 -0.2 3
-   vertex -0.2 211.2 11.6
-   vertex -0.2 -0.2 11.6
+   vertex -0.2 211.2 11
+   vertex -0.2 -0.2 11
   endloop
  endfacet
  facet normal 0 1 0
   outer loop
    vertex -0.2 211.2 3
    vertex -3.2 211.2 3
-   vertex -3.2 211.2 11.6
+   vertex -3.2 211.2 11
   endloop
  endfacet
  facet normal 0 1 -0
   outer loop
    vertex -0.2 211.2 3
-   vertex -3.2 211.2 11.6
-   vertex -0.2 211.2 11.6
+   vertex -3.2 211.2 11
+   vertex -0.2 211.2 11
   endloop
  endfacet
  facet normal -1 0 0
   outer loop
    vertex -3.2 211.2 3
    vertex -3.2 -0.2 3
-   vertex -3.2 -0.2 11.6
+   vertex -3.2 -0.2 11
   endloop
  endfacet
  facet normal -1 0 0
   outer loop
    vertex -3.2 211.2 3
-   vertex -3.2 -0.2 11.6
-   vertex -3.2 211.2 11.6
+   vertex -3.2 -0.2 11
+   vertex -3.2 211.2 11
   endloop
  endfacet
  facet normal 0 0 -1
@@ -995,72 +995,72 @@ solid HALO_Wall_Mount_V2
  endfacet
  facet normal 0 0 1
   outer loop
-   vertex 125.2 -0.2 11.6
-   vertex 128.2 -0.2 11.6
-   vertex 128.2 124 11.6
+   vertex 125.2 -0.2 11
+   vertex 128.2 -0.2 11
+   vertex 128.2 124 11
   endloop
  endfacet
  facet normal 0 0 1
   outer loop
-   vertex 125.2 -0.2 11.6
-   vertex 128.2 124 11.6
-   vertex 125.2 124 11.6
+   vertex 125.2 -0.2 11
+   vertex 128.2 124 11
+   vertex 125.2 124 11
   endloop
  endfacet
  facet normal 0 -1 0
   outer loop
    vertex 125.2 -0.2 3
    vertex 128.2 -0.2 3
-   vertex 128.2 -0.2 11.6
+   vertex 128.2 -0.2 11
   endloop
  endfacet
  facet normal 0 -1 0
   outer loop
    vertex 125.2 -0.2 3
-   vertex 128.2 -0.2 11.6
-   vertex 125.2 -0.2 11.6
+   vertex 128.2 -0.2 11
+   vertex 125.2 -0.2 11
   endloop
  endfacet
  facet normal 1 0 0
   outer loop
    vertex 128.2 -0.2 3
    vertex 128.2 124 3
-   vertex 128.2 124 11.6
+   vertex 128.2 124 11
   endloop
  endfacet
  facet normal 1 0 0
   outer loop
    vertex 128.2 -0.2 3
-   vertex 128.2 124 11.6
-   vertex 128.2 -0.2 11.6
+   vertex 128.2 124 11
+   vertex 128.2 -0.2 11
   endloop
  endfacet
  facet normal 0 1 0
   outer loop
    vertex 128.2 124 3
    vertex 125.2 124 3
-   vertex 125.2 124 11.6
+   vertex 125.2 124 11
   endloop
  endfacet
  facet normal 0 1 -0
   outer loop
    vertex 128.2 124 3
-   vertex 125.2 124 11.6
-   vertex 128.2 124 11.6
+   vertex 125.2 124 11
+   vertex 128.2 124 11
   endloop
  endfacet
  facet normal -1 0 0
   outer loop
    vertex 125.2 124 3
    vertex 125.2 -0.2 3
-   vertex 125.2 -0.2 11.6
+   vertex 125.2 -0.2 11
   endloop
  endfacet
  facet normal -1 0 0
   outer loop
    vertex 125.2 124 3
-   vertex 125.2 -0.2 11.6
-   vertex 125.2 124 11.6
+   vertex 125.2 -0.2 11
+   vertex 125.2 124 11
   endloop
  endfacet
  facet normal 0 0 -1
@@ -1079,72 +1079,72 @@ solid HALO_Wall_Mount_V2
  endfacet
  facet normal 0 0 1
   outer loop
-   vertex 125.2 170 11.6
-   vertex 128.2 170 11.6
-   vertex 128.2 211.2 11.6
+   vertex 125.2 170 11
+   vertex 128.2 170 11
+   vertex 128.2 211.2 11
   endloop
  endfacet
  facet normal 0 0 1
   outer loop
-   vertex 125.2 170 11.6
-   vertex 128.2 211.2 11.6
-   vertex 125.2 211.2 11.6
+   vertex 125.2 170 11
+   vertex 128.2 211.2 11
+   vertex 125.2 211.2 11
   endloop
  endfacet
  facet normal 0 -1 0
   outer loop
    vertex 125.2 170 3
    vertex 128.2 170 3
-   vertex 128.2 170 11.6
+   vertex 128.2 170 11
   endloop
  endfacet
  facet normal 0 -1 0
   outer loop
    vertex 125.2 170 3
-   vertex 128.2 170 11.6
-   vertex 125.2 170 11.6
+   vertex 128.2 170 11
+   vertex 125.2 170 11
   endloop
  endfacet
  facet normal 1 0 0
   outer loop
    vertex 128.2 170 3
    vertex 128.2 211.2 3
-   vertex 128.2 211.2 11.6
+   vertex 128.2 211.2 11
   endloop
  endfacet
  facet normal 1 0 0
   outer loop
    vertex 128.2 170 3
-   vertex 128.2 211.2 11.6
-   vertex 128.2 170 11.6
+   vertex 128.2 211.2 11
+   vertex 128.2 170 11
   endloop
  endfacet
  facet normal 0 1 0
   outer loop
    vertex 128.2 211.2 3
    vertex 125.2 211.2 3
-   vertex 125.2 211.2 11.6
+   vertex 125.2 211.2 11
   endloop
  endfacet
  facet normal 0 1 -0
   outer loop
    vertex 128.2 211.2 3
-   vertex 125.2 211.2 11.6
-   vertex 128.2 211.2 11.6
+   vertex 125.2 211.2 11
+   vertex 128.2 211.2 11
   endloop
  endfacet
  facet normal -1 0 0
   outer loop
    vertex 125.2 211.2 3
    vertex 125.2 170 3
-   vertex 125.2 170 11.6
+   vertex 125.2 170 11
   endloop
  endfacet
  facet normal -1 0 0
   outer loop
    vertex 125.2 211.2 3
-   vertex 125.2 170 11.6
-   vertex 125.2 211.2 11.6
+   vertex 125.2 170 11
+   vertex 125.2 211.2 11
   endloop
  endfacet
  facet normal 0 0 -1
@@ -1324,9 +1324,9 @@ solid HALO_Wall_Mount_V2
  endfacet
  facet normal 0 0 -1
   outer loop
-   vertex -0.2 -0.2 11.6
-   vertex 51 -0.2 11.6
-   vertex 51 -3.2 11.6
+   vertex -0.2 -0.2 11
+   vertex 51 -0.2 11
+   vertex 51 -3.2 11
   endloop
  endfacet
  facet normal 0 0 1
@@ -1338,9 +1338,9 @@ solid HALO_Wall_Mount_V2
  endfacet
  facet normal 0 0 -1
   outer loop
-   vertex -0.2 -0.2 11.6
-   vertex 51 -3.2 11.6
-   vertex 1.8 -3.2 11.6
+   vertex -0.2 -0.2 11
+   vertex 51 -3.2 11
+   vertex 1.8 -3.2 11
   endloop
  endfacet
  facet normal 0 0 1
@@ -1352,79 +1352,79 @@ solid HALO_Wall_Mount_V2
  endfacet
  facet normal 0 0 -1
   outer loop
-   vertex -0.2 -0.2 11.6
-   vertex 1.8 -3.2 11.6
-   vertex -0.2 -1.2 11.6
+   vertex -0.2 -0.2 11
+   vertex 1.8 -3.2 11
+   vertex -0.2 -1.2 11
   endloop
  endfacet
  facet normal 0 -1 0
   outer loop
    vertex -0.2 -0.2 3
    vertex 51 -0.2 3
-   vertex 51 -0.2 11.6
+   vertex 51 -0.2 11
   endloop
  endfacet
  facet normal 0 -1 0
   outer loop
    vertex -0.2 -0.2 3
-   vertex 51 -0.2 11.6
-   vertex -0.2 -0.2 11.6
+   vertex 51 -0.2 11
+   vertex -0.2 -0.2 11
   endloop
  endfacet
  facet normal -1 0 0
   outer loop
    vertex 51 -0.2 3
    vertex 51 -3.2 3
-   vertex 51 -3.2 11.6
+   vertex 51 -3.2 11
   endloop
  endfacet
  facet normal -1 0 0
   outer loop
    vertex 51 -0.2 3
-   vertex 51 -3.2 11.6
-   vertex 51 -0.2 11.6
+   vertex 51 -3.2 11
+   vertex 51 -0.2 11
   endloop
  endfacet
  facet normal 0 1 0
   outer loop
    vertex 51 -3.2 3
    vertex 1.8 -3.2 3
-   vertex 1.8 -3.2 11.6
+   vertex 1.8 -3.2 11
   endloop
  endfacet
  facet normal 0 1 -0
   outer loop
    vertex 51 -3.2 3
-   vertex 1.8 -3.2 11.6
-   vertex 51 -3.2 11.6
+   vertex 1.8 -3.2 11
+   vertex 51 -3.2 11
   endloop
  endfacet
  facet normal 0.707107 0.707107 0
   outer loop
    vertex 1.8 -3.2 3
    vertex -0.2 -1.2 3
-   vertex -0.2 -1.2 11.6
+   vertex -0.2 -1.2 11
   endloop
  endfacet
  facet normal 0.707107 0.707107 -0
   outer loop
    vertex 1.8 -3.2 3
-   vertex -0.2 -1.2 11.6
-   vertex 1.8 -3.2 11.6
+   vertex -0.2 -1.2 11
+   vertex 1.8 -3.2 11
   endloop
  endfacet
  facet normal 1 0 0
   outer loop
    vertex -0.2 -1.2 3
    vertex -0.2 -0.2 3
-   vertex -0.2 -0.2 11.6
+   vertex -0.2 -0.2 11
   endloop
  endfacet
  facet normal 1 0 0
   outer loop
    vertex -0.2 -1.2 3
-   vertex -0.2 -0.2 11.6
-   vertex -0.2 -1.2 11.6
+   vertex -0.2 -0.2 11
+   vertex -0.2 -1.2 11
   endloop
  endfacet
  facet normal -0 0 1
@@ -1436,9 +1436,9 @@ solid HALO_Wall_Mount_V2
  endfacet
  facet normal 0 0 -1
   outer loop
-   vertex 73 -0.2 11.6
-   vertex 125.2 -0.2 11.6
-   vertex 125.2 -1.2 11.6
+   vertex 73 -0.2 11
+   vertex 125.2 -0.2 11
+   vertex 125.2 -1.2 11
   endloop
  endfacet
  facet normal 0 0 1
@@ -1450,9 +1450,9 @@ solid HALO_Wall_Mount_V2
  endfacet
  facet normal 0 0 -1
   outer loop
-   vertex 73 -0.2 11.6
-   vertex 125.2 -1.2 11.6
-   vertex 123.2 -3.2 11.6
+   vertex 73 -0.2 11
+   vertex 125.2 -1.2 11
+   vertex 123.2 -3.2 11
   endloop
  endfacet
  facet normal 0 0 1
@@ -1464,79 +1464,79 @@ solid HALO_Wall_Mount_V2
  endfacet
  facet normal 0 0 -1
   outer loop
-   vertex 73 -0.2 11.6
-   vertex 123.2 -3.2 11.6
-   vertex 73 -3.2 11.6
+   vertex 73 -0.2 11
+   vertex 123.2 -3.2 11
+   vertex 73 -3.2 11
   endloop
  endfacet
  facet normal 0 -1 0
   outer loop
    vertex 73 -0.2 3
    vertex 125.2 -0.2 3
-   vertex 125.2 -0.2 11.6
+   vertex 125.2 -0.2 11
   endloop
  endfacet
  facet normal 0 -1 0
   outer loop
    vertex 73 -0.2 3
-   vertex 125.2 -0.2 11.6
-   vertex 73 -0.2 11.6
+   vertex 125.2 -0.2 11
+   vertex 73 -0.2 11
   endloop
  endfacet
  facet normal -1 0 0
   outer loop
    vertex 125.2 -0.2 3
    vertex 125.2 -1.2 3
-   vertex 125.2 -1.2 11.6
+   vertex 125.2 -1.2 11
   endloop
  endfacet
  facet normal -1 0 0
   outer loop
    vertex 125.2 -0.2 3
-   vertex 125.2 -1.2 11.6
-   vertex 125.2 -0.2 11.6
+   vertex 125.2 -1.2 11
+   vertex 125.2 -0.2 11
   endloop
  endfacet
  facet normal -0.707107 0.707107 0
   outer loop
    vertex 125.2 -1.2 3
    vertex 123.2 -3.2 3
-   vertex 123.2 -3.2 11.6
+   vertex 123.2 -3.2 11
   endloop
  endfacet
  facet normal -0.707107 0.707107 0
   outer loop
    vertex 125.2 -1.2 3
-   vertex 123.2 -3.2 11.6
-   vertex 125.2 -1.2 11.6
+   vertex 123.2 -3.2 11
+   vertex 125.2 -1.2 11
   endloop
  endfacet
  facet normal 0 1 0
   outer loop
    vertex 123.2 -3.2 3
    vertex 73 -3.2 3
-   vertex 73 -3.2 11.6
+   vertex 73 -3.2 11
   endloop
  endfacet
  facet normal 0 1 -0
   outer loop
    vertex 123.2 -3.2 3
-   vertex 73 -3.2 11.6
-   vertex 123.2 -3.2 11.6
+   vertex 73 -3.2 11
+   vertex 123.2 -3.2 11
   endloop
  endfacet
  facet normal 1 0 0
   outer loop
    vertex 73 -3.2 3
    vertex 73 -0.2 3
-   vertex 73 -0.2 11.6
+   vertex 73 -0.2 11
   endloop
  endfacet
  facet normal 1 0 0
   outer loop
    vertex 73 -3.2 3
-   vertex 73 -0.2 11.6
-   vertex 73 -3.2 11.6
+   vertex 73 -0.2 11
+   vertex 73 -3.2 11
   endloop
  endfacet
 endsolid HALO_Wall_Mount_V2

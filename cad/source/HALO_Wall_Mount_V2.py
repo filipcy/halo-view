@@ -13,7 +13,11 @@ BACK_T = 3.0                            # wall -> tablet rear
 WALL_CONTACT_Z = 0.0
 TABLET_REAR_Z = WALL_CONTACT_Z + BACK_T
 TABLET_FRONT_Z = TABLET_REAR_Z + DEVICE_T
-GUIDE_DEPTH = DEVICE_T + 0.60           # validated Z pocket allowance
+# Preserve the Rev A 8.6 mm Z-clearance concept as a reference envelope, while
+# constraining every printable V2 feature to the real 8 mm tablet thickness.
+VALIDATED_POCKET_DEPTH = DEVICE_T + 0.60
+GUIDE_DEPTH = VALIDATED_POCKET_DEPTH     # compatibility name; not a solid extent
+PRINTABLE_FORWARD_DEPTH = TABLET_FRONT_Z - TABLET_REAR_Z
 SIDE_W, SHELF_H = 3.0, 3.0
 LIP_OVERLAP, LIP_T = 1.25, 0.8
 # Retainers occupy the front-most 0.8 mm of the real tablet thickness.  They
@@ -74,21 +78,21 @@ def solids():
         box("back-bottom-left", 18, y0, 0, USB_CENTRE_X - USB_POCKET[0] / 2, 18, BACK_T),
         box("back-bottom-right", USB_CENTRE_X + USB_POCKET[0] / 2, y0, 0, DEVICE_W - 18, 18, BACK_T),
         # Left guide and its minimal front safety lip.
-        box("guide-left", x0 - SIDE_W, y0, BACK_T, x0, y1, BACK_T + GUIDE_DEPTH),
+        box("guide-left", x0 - SIDE_W, y0, TABLET_REAR_Z, x0, y1, TABLET_FRONT_Z),
         box("lip-left", x0 - SIDE_W, y0, RETAINER_MIN_Z, LIP_OVERLAP, y1, RETAINER_MAX_Z),
         # Right guide is split at the button access, exactly 22 mm lower.
-        box("guide-right-low", x1, y0, BACK_T, x1 + SIDE_W, BUTTON_V2[0], BACK_T + GUIDE_DEPTH),
-        box("guide-right-high", x1, BUTTON_V2[1], BACK_T, x1 + SIDE_W, y1, BACK_T + GUIDE_DEPTH),
+        box("guide-right-low", x1, y0, TABLET_REAR_Z, x1 + SIDE_W, BUTTON_V2[0], TABLET_FRONT_Z),
+        box("guide-right-high", x1, BUTTON_V2[1], TABLET_REAR_Z, x1 + SIDE_W, y1, TABLET_FRONT_Z),
         box("lip-right-low", DEVICE_W - LIP_OVERLAP, y0, RETAINER_MIN_Z, x1 + SIDE_W, BUTTON_V2[0], RETAINER_MAX_Z),
         box("lip-right-high", DEVICE_W - LIP_OVERLAP, BUTTON_V2[1], RETAINER_MIN_Z, x1 + SIDE_W, y1, RETAINER_MAX_Z),
         # Continuous lower load shelf, interrupted only by the connector pocket.
         prism("shelf-left-chamfered", [(x0, y0), (USB_CENTRE_X - USB_POCKET[0] / 2, y0),
               (USB_CENTRE_X - USB_POCKET[0] / 2, y0 - SHELF_H),
               (x0 + EDGE_CHAMFER, y0 - SHELF_H), (x0, y0 - SHELF_H + EDGE_CHAMFER)],
-              BACK_T, BACK_T + GUIDE_DEPTH),
+              TABLET_REAR_Z, TABLET_FRONT_Z),
         prism("shelf-right-chamfered", [(USB_CENTRE_X + USB_POCKET[0] / 2, y0), (x1, y0),
               (x1, y0 - SHELF_H + EDGE_CHAMFER), (x1 - EDGE_CHAMFER, y0 - SHELF_H),
-              (USB_CENTRE_X + USB_POCKET[0] / 2, y0 - SHELF_H)], BACK_T, BACK_T + GUIDE_DEPTH),
+              (USB_CENTRE_X + USB_POCKET[0] / 2, y0 - SHELF_H)], TABLET_REAR_Z, TABLET_FRONT_Z),
     ]
     return parts
 
@@ -114,6 +118,11 @@ def triangles(part):
     faces = [(0,2,1),(0,3,2),(4,5,6),(4,6,7),(0,1,5),(0,5,4),
              (1,2,6),(1,6,5),(2,3,7),(2,7,6),(3,0,4),(3,4,7)]
     return [(v[i], v[j], v[k]) for i,j,k in faces]
+
+
+def solid_max_z(part):
+    """Return the forward-most Z for either a box or convex-prism solid."""
+    return part[3] if len(part) == 4 else part[2][2]
 
 
 def normal(t):
@@ -161,7 +170,8 @@ def views():
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     parts=solids(); write_stl(parts); views()
-    print(f"V2: wall-contact-to-actual-tablet-front={TABLET_FRONT_Z - WALL_CONTACT_Z:.1f} mm; parts={len(parts)}; output={OUT}")
+    maximum_z = max(solid_max_z(part) for part in parts)
+    print(f"V2: wall-contact-to-actual-tablet-front={TABLET_FRONT_Z - WALL_CONTACT_Z:.1f} mm; max-printable-holder-z={maximum_z:.1f} mm; parts={len(parts)}; output={OUT}")
 
 
 if __name__ == '__main__':

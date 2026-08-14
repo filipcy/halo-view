@@ -7,6 +7,11 @@ skeleton directly against the wall. The 11 mm dimension is explicitly measured
 from the wall-contact plane (Z=0) to the actual front surface of the 8 mm tablet
 (Z=3+8), not to a clearance-envelope or printed-retainer face.
 
+The physically validated 8.6 mm Rev A pocket-depth assumption remains recorded
+as `VALIDATED_POCKET_DEPTH`, but it is not used as a printable V2 forward
+extent. Guides and shelves occupy the real tablet envelope from Z=3.0 to
+Z=11.0 mm. The true maximum Z across every generated holder solid is 11.0 mm.
+
 The top is open. A split 3 mm bottom shelf carries the tablet; 1.25 mm side lips
 prevent forward release while leaving the Samsung bezel dominant. The right
 button opening retains its 46 mm span and is moved from 146–192 mm to 124–170 mm

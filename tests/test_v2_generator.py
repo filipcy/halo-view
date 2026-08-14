@@ -16,7 +16,9 @@ class V2GeneratorGuards(unittest.TestCase):
         self.assertEqual((V2.DEVICE_W, V2.DEVICE_H, V2.DEVICE_T, V2.DEVICE_R),
                          (125.0, 211.0, 8.0, 8.5))
         self.assertEqual((V2.CLEARANCE_X, V2.CLEARANCE_Y), (0.20, 0.20))
+        self.assertEqual(V2.VALIDATED_POCKET_DEPTH, 8.6)
         self.assertEqual(V2.GUIDE_DEPTH, 8.6)
+        self.assertEqual(V2.PRINTABLE_FORWARD_DEPTH, 8.0)
 
     def test_projection_and_retention_targets(self):
         self.assertEqual(V2.WALL_CONTACT_Z, 0.0)
@@ -46,6 +48,16 @@ class V2GeneratorGuards(unittest.TestCase):
         self.assertEqual(left[2][0], V2.LIP_OVERLAP)
         self.assertEqual(V2.DEVICE_W - right_low[1][0], V2.LIP_OVERLAP)
         self.assertEqual(V2.LIP_OVERLAP, 1.25)
+
+    def test_every_printable_solid_stays_at_or_behind_tablet_front(self):
+        parts = V2.solids()
+        self.assertTrue(any(len(part) == 3 for part in parts), "boxes covered")
+        self.assertTrue(any(len(part) == 4 for part in parts), "prisms covered")
+        maximum_z = max(V2.solid_max_z(part) for part in parts)
+        for part in parts:
+            self.assertLessEqual(
+                V2.solid_max_z(part), V2.TABLET_FRONT_Z, part[0])
+        self.assertEqual(maximum_z, 11.0)
 
     def test_camera_is_rear_view_left_not_mirrored_rev_a_side(self):
         self.assertEqual(V2.CAMERA_CENTER_X,
