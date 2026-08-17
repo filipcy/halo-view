@@ -197,7 +197,7 @@ def _join_holder(component, bodies):
     return target
 
 
-def _cut_usb_route(component, holder):
+def _add_usb_bridge(component, holder):
     """Add one bridge across the existing split-support USB cable opening."""
     pocket_half = USB_POCKET[0] / 2
     # The split lower rear supports already define the plug pocket and cable
@@ -283,6 +283,37 @@ def _body_diagnostics(component):
     return "\n".join(lines)
 
 
+def _validate_central_cable_opening(holder):
+    """Reject residual shelves/ribs while proving the one bridge and its clearance."""
+    def has_material(x, y, z):
+        result = holder.pointContainment(
+            adsk.core.Point3D.create(_cm(x), _cm(y), _cm(z)))
+        return result in (
+            adsk.fusion.PointContainment.PointInsidePointContainment,
+            adsk.fusion.PointContainment.PointOnPointContainment)
+
+    # Probe the central axis on both sides of the intended bridge.  At the roof
+    # elevation every probe must be empty except the bridge itself; at the cable
+    # elevation even the bridge centre must remain open.
+    roof_z = (USB_CABLE_CLEARANCE_Z + REAR_SUPPORT_MAX_Z) / 2
+    clear_y = (2.0, 8.0, 22.0, WALL_EXIT_Y)
+    residual = [y for y in clear_y if has_material(USB_CENTRE_X, y, roof_z)]
+    if residual:
+        raise RuntimeError(
+            f"Residual geometry crosses central cable opening at Y={residual} mm")
+    if has_material(USB_CENTRE_X, USB_BRIDGE_CENTER_Y,
+                    USB_CABLE_CLEARANCE_Z / 2):
+        raise RuntimeError("USB bridge blocks the required cable clearance underneath")
+    if not has_material(USB_CENTRE_X, USB_BRIDGE_CENTER_Y, roof_z):
+        raise RuntimeError("Expected transverse USB bridge roof is absent")
+    return (
+        f"Central USB opening clear at roof Z={roof_z:.2f} mm for Y={clear_y}; "
+        f"single bridge occupies Y="
+        f"{USB_BRIDGE_CENTER_Y - USB_BRIDGE_W / 2:.2f}–"
+        f"{USB_BRIDGE_CENTER_Y + USB_BRIDGE_W / 2:.2f} mm with "
+        f"{USB_CABLE_CLEARANCE_Z:.2f} mm clearance underneath")
+
+
 def _validate_and_report(ui, holder_component, holder, envelope_component,
                          bridge_feature, chamfer_feature):
     if holder_component.bRepBodies.count != 1:
@@ -302,6 +333,7 @@ def _validate_and_report(ui, holder_component, holder, envelope_component,
         raise RuntimeError("Single transverse USB retaining bridge is missing or invalid")
     if not chamfer_feature or not chamfer_feature.isValid:
         raise RuntimeError("Long front outer-edge chamfer is missing or invalid")
+    cable_report = _validate_central_cable_opening(holder)
     channel_half = USB_CHANNEL_W / 2
     if not (0 <= USB_CENTRE_X - channel_half and
             USB_CENTRE_X + channel_half <= DEVICE_W and
@@ -323,7 +355,8 @@ def _validate_and_report(ui, holder_component, holder, envelope_component,
         f"Holder maximum Z: {max_z:.2f} mm\n"
         f"Wall-to-tablet-front target: {TABLET_FRONT_Z:.2f} mm\n"
         f"Rear support maximum Z: {REAR_SUPPORT_MAX_Z:.2f} mm\n"
-        f"Real rear clearance: {REAR_CLEARANCE_Z:.2f} mm")
+        f"Real rear clearance: {REAR_CLEARANCE_Z:.2f} mm\n"
+        f"{cable_report}")
 
 
 def _export(design, holder_component, holder):
@@ -383,7 +416,7 @@ def run(context):
         root = design.rootComponent
         holder_component = _create_component(root, COMPONENT_NAME)
         holder = _join_holder(holder_component, _holder_parts(holder_component))
-        bridge_feature = _cut_usb_route(holder_component, holder)
+        bridge_feature = _add_usb_bridge(holder_component, holder)
         chamfer_feature = _chamfer_long_front_edges(holder_component, holder)
         envelope_component = _create_component(root, ENVELOPE_NAME)
         envelope = _rounded_box(envelope_component, "Tablet Envelope", DEVICE_W,

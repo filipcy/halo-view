@@ -56,7 +56,7 @@ class FusionGeneratorStaticTests(unittest.TestCase):
 
     def test_provisional_usb_parameters_drive_real_cut_geometry(self):
         source = FUSION.read_text(encoding="utf-8")
-        self.assertIn("def _cut_usb_route", source)
+        self.assertIn("def _add_usb_bridge", source)
         self.assertIn('"Back Bottom Left"', source)
         self.assertIn('"Back Bottom Right"', source)
         self.assertNotIn('"PROVISIONAL USB Routing Deck"', source)
@@ -80,12 +80,21 @@ class FusionGeneratorStaticTests(unittest.TestCase):
 
     def test_usb_features_do_not_leave_helper_brep_bodies(self):
         source = FUSION.read_text(encoding="utf-8")
-        route = source[source.index("def _cut_usb_route"):source.index("def _chamfer_long_front_edges")]
+        route = source[source.index("def _add_usb_bridge"):source.index("def _chamfer_long_front_edges")]
         self.assertIn("JoinFeatureOperation", route)
         self.assertEqual(route.count("combineFeatures.createInput"), 1)
         self.assertIn("join_input.isKeepToolBodies = False", route)
         self.assertNotIn("PROVISIONAL USB Routing Deck", source)
         self.assertIn("holder_component.bRepBodies.count != 1", source)
+
+    def test_central_opening_rejects_residual_geometry(self):
+        source = FUSION.read_text(encoding="utf-8")
+        self.assertIn("def _validate_central_cable_opening", source)
+        self.assertIn("holder.pointContainment", source)
+        self.assertIn("Residual geometry crosses central cable opening", source)
+        self.assertIn("USB bridge blocks the required cable clearance underneath", source)
+        self.assertIn("Expected transverse USB bridge roof is absent", source)
+        self.assertNotIn("def _cut_usb_route", source)
 
     def test_one_body_failure_reports_each_remaining_body(self):
         source = FUSION.read_text(encoding="utf-8")
